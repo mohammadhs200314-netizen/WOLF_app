@@ -574,6 +574,53 @@ function genPassword(len = 20) {
 }
 
 /* ================= WOLF BRAIN — offline Persian conversation engine ================= */
+
+/* ===== Learned Q/A memory from online chats ===== */
+const Learned = (() => {
+  const KEY = "wolf_learned_data";
+  const MAX = 50;
+  const FA = "۰۱۲۳۴۵۶۷۸۹", AR = "٠١٢٣٤٥٦٧٨٩";
+  const normQ = (s) => String(s || "")
+    .replace(/[۰-۹]/g, d => String(FA.indexOf(d))).replace(/[٠-٩]/g, d => String(AR.indexOf(d)))
+    .replace(/ي/g, "ی").replace(/ك/g, "ک").replace(/[ۀة]/g, "ه")
+    .replace(/[\u064B-\u065F\u0670\u0640\u200c\u200d]/g, "")
+    .replace(/[؟?!،,؛;:«»"'`()\[\]{}…]/g, " ")
+    .replace(/\s+/g, " ").trim().toLowerCase();
+  const load = () => {
+    try {
+      const a = JSON.parse(localStorage.getItem(KEY) || "[]");
+      return Array.isArray(a) ? a : [];
+    } catch { return []; }
+  };
+  const save = (arr) => {
+    try { localStorage.setItem(KEY, JSON.stringify(arr.slice(-MAX))); } catch {}
+  };
+  return {
+    remember(q, a) {
+      if (!q || !a) return;
+      const nq = normQ(q);
+      if (nq.length < 2) return;
+      let list = load().filter(x => normQ(x.q) !== nq);
+      list.push({ q: nq, a: String(a), t: Date.now() });
+      save(list);
+    },
+    lookup(q) {
+      const nq = normQ(q);
+      if (!nq) return null;
+      const list = load();
+      // exact then contains match (prefer longest)
+      let best = null;
+      for (const item of list) {
+        if (item.q === nq) return item.a;
+        if (nq.includes(item.q) || item.q.includes(nq)) {
+          if (!best || item.q.length > best.q.length) best = item;
+        }
+      }
+      return best ? best.a : null;
+    }
+  };
+})();
+
 const Brain = (() => {
   const FA = "۰۱۲۳۴۵۶۷۸۹", AR = "٠١٢٣٤٥٦٧٨٩";
   const base = (s) => String(s || "")
@@ -824,6 +871,12 @@ const Brain = (() => {
     if (!n) return out("چیزی ننوشتی؛ بنویس، گوش می‌کنم.");
     if (n === "/clear" || S(n, "مکالمه رو پاک", "چت رو پاک", "گفتگو رو پاک")) return { ...out(""), clear: true };
 
+    /* learned answers from previous online chats */
+    try {
+      const learned = typeof Learned !== "undefined" && Learned.lookup(raw);
+      if (learned) return out(learned);
+    } catch (_) {}
+
     /* crisis: always first, never joked about */
     if (S(n, "خودکشی", "خودمو بکشم", "خودم رو بکشم", "میخوام بمیرم", "نمیخوام زنده باشم", "بمیرم بهتره", "به خودم آسیب")) {
       return out(`حرفت رو جدی می‌گیرم${nm}، و خوشحالم که نوشتی. تنها نیستی و این حال می‌تونه عوض بشه.\n\nاگه همین الان در خطری یا فکر آسیب زدن به خودت هست، لطفاً با اورژانس ۱۱۵ یا اورژانس اجتماعی ۱۲۳ تماس بگیر، یا به کسی که بهش اعتماد داری زنگ بزن و کنارش باش. من یه برنامه‌ام و جای آدم‌ها رو نمی‌گیرم، ولی اینجام و گوش می‌کنم.`);
@@ -1002,47 +1055,61 @@ function sfx(name, on) {
 }
 
 const WolfLogo = ({ size=18 }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-    {/* sharper pointed wolf ears */}
-    <path d="M7 13 L3 1.5 L12 9.5 Z" fill="currentColor" opacity="0.95"/>
-    <path d="M25 13 L29 1.5 L20 9.5 Z" fill="currentColor" opacity="0.95"/>
-    {/* elongated angular snout / head outline - neon stroke */}
-    <path d="M6.5 14.5 C6.5 9 10.5 6 16 6 C21.5 6 25.5 9 25.5 14.5 C25.5 18.5 23 21.5 20 23.5 L16 27 L12 23.5 C9 21.5 6.5 18.5 6.5 14.5 Z"
-      fill="none" stroke="#00c4ff" strokeWidth="1.5" opacity="0.9"/>
-    {/* inner face glow */}
-    <path d="M8 15 C8 10.5 11.2 8 16 8 C20.8 8 24 10.5 24 15 C24 18.2 21.8 20.8 19.2 22.5 L16 25 L12.8 22.5 C10.2 20.8 8 18.2 8 15 Z"
-      fill="none" stroke="#00e8a0" strokeWidth="0.9" opacity="0.55"/>
-    {/* elongated snout lines */}
-    <path d="M12 18.5 L16 22.5 L20 18.5" fill="none" stroke="#00e8a0" strokeWidth="1.3"/>
-    <path d="M13.5 19.8 L16 21.8 L18.5 19.8" fill="none" stroke="#00c4ff" strokeWidth="0.8" opacity="0.7"/>
-    {/* nose */}
-    <ellipse cx="16" cy="20.8" rx="1.8" ry="1.2" fill="#00e8a0" opacity="0.85"/>
-    {/* neon eyes */}
-    <circle cx="11.2" cy="13.2" r="2.1" fill="#00e8a0"/>
-    <circle cx="20.8" cy="13.2" r="2.1" fill="#00e8a0"/>
-    <circle cx="11.5" cy="12.9" r="0.7" fill="#04120c"/>
-    <circle cx="21.1" cy="12.9" r="0.7" fill="#04120c"/>
-    <circle cx="11.7" cy="12.6" r="0.35" fill="#00c4ff"/>
-    <circle cx="21.3" cy="12.6" r="0.35" fill="#00c4ff"/>
-    {/* brow ridges */}
-    <path d="M8 11.2 Q11.5 9.2 14.2 11" fill="none" stroke="#00c4ff" strokeWidth="1.1" opacity="0.75"/>
-    <path d="M17.8 11 Q20.5 9.2 24 11.2" fill="none" stroke="#00c4ff" strokeWidth="1.1" opacity="0.75"/>
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    {/* geometric neon wolf head - low poly style */}
+    <g stroke="#7dffc8" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" fill="none">
+      {/* outer head silhouette */}
+      <path d="M32 6 L18 14 L12 28 L14 42 L24 54 L32 58 L40 54 L50 42 L52 28 L46 14 Z"/>
+      {/* left ear */}
+      <path d="M18 14 L10 4 L22 16"/>
+      <path d="M18 14 L22 16 L20 24"/>
+      {/* right ear */}
+      <path d="M46 14 L54 4 L42 16"/>
+      <path d="M46 14 L42 16 L44 24"/>
+      {/* brow / forehead facets */}
+      <path d="M22 16 L32 12 L42 16"/>
+      <path d="M22 16 L26 24 L32 20 L38 24 L42 16"/>
+      <path d="M26 24 L32 28 L38 24"/>
+      {/* eyes facets */}
+      <path d="M24 28 L28 26 L30 30 L26 32 Z"/>
+      <path d="M40 28 L36 26 L34 30 L38 32 Z"/>
+      {/* nose bridge / snout */}
+      <path d="M32 28 L28 36 L32 40 L36 36 Z"/>
+      <path d="M28 36 L24 42 L32 48 L40 42 L36 36"/>
+      <path d="M24 42 L32 52 L40 42"/>
+      <path d="M32 40 L32 52"/>
+      {/* cheek lines */}
+      <path d="M20 24 L16 34 L24 42"/>
+      <path d="M44 24 L48 34 L40 42"/>
+      {/* lower jaw */}
+      <path d="M24 54 L32 58 L40 54"/>
+    </g>
+    {/* neon eye glow dots */}
+    <circle cx="27" cy="29" r="1.4" fill="#7dffc8"/>
+    <circle cx="37" cy="29" r="1.4" fill="#7dffc8"/>
   </svg>
 );
 
 const WolfLive = () => (
-  <svg className="wolf-live" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.4">
-    <path className="ear-l" d="M7 13 L3 1.5 L12 9.5 Z" fill="currentColor" stroke="none" opacity="0.9"/>
-    <path className="ear-r" d="M25 13 L29 1.5 L20 9.5 Z" fill="currentColor" stroke="none" opacity="0.9"/>
-    <path d="M6.5 14.5 C6.5 9 10.5 6 16 6 C21.5 6 25.5 9 25.5 14.5 C25.5 18.5 23 21.5 20 23.5 L16 27 L12 23.5 C9 21.5 6.5 18.5 6.5 14.5 Z" stroke="#00c4ff" strokeWidth="1.4" fill="none"/>
-    <path d="M12 18.5 L16 22.5 L20 18.5" stroke="#00e8a0" strokeWidth="1.2"/>
-    <ellipse cx="16" cy="20.8" rx="1.8" ry="1.2" fill="#00e8a0" stroke="none" opacity="0.8"/>
-    <circle className="eye" cx="11.2" cy="13.2" r="2" fill="#00e8a0" stroke="none"/>
-    <circle className="eye" cx="20.8" cy="13.2" r="2" fill="#00e8a0" stroke="none"/>
-    <circle cx="11.5" cy="12.9" r="0.6" fill="#04120c" stroke="none"/>
-    <circle cx="21.1" cy="12.9" r="0.6" fill="#04120c" stroke="none"/>
-    <path d="M8 11.2 Q11.5 9.2 14.2 11" stroke="#00c4ff" opacity="0.7"/>
-    <path d="M17.8 11 Q20.5 9.2 24 11.2" stroke="#00c4ff" opacity="0.7"/>
+  <svg className="wolf-live" viewBox="0 0 64 64" fill="none">
+    <g stroke="#7dffc8" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" fill="none">
+      <path d="M32 6 L18 14 L12 28 L14 42 L24 54 L32 58 L40 54 L50 42 L52 28 L46 14 Z"/>
+      <path className="ear-l" d="M18 14 L10 4 L22 16 L20 24 Z" fill="#7dffc822" stroke="none"/>
+      <path className="ear-l" d="M18 14 L10 4 L22 16"/>
+      <path className="ear-r" d="M46 14 L54 4 L42 16 L44 24 Z" fill="#7dffc822" stroke="none"/>
+      <path className="ear-r" d="M46 14 L54 4 L42 16"/>
+      <path d="M22 16 L32 12 L42 16 L38 24 L32 20 L26 24 Z"/>
+      <path d="M26 24 L32 28 L38 24"/>
+      <path d="M24 28 L28 26 L30 30 L26 32 Z"/>
+      <path d="M40 28 L36 26 L34 30 L38 32 Z"/>
+      <path d="M32 28 L28 36 L32 40 L36 36 Z"/>
+      <path d="M28 36 L24 42 L32 48 L40 42 L36 36"/>
+      <path d="M24 42 L32 52 L40 42"/>
+      <path d="M20 24 L16 34 L24 42"/>
+      <path d="M44 24 L48 34 L40 42"/>
+    </g>
+    <circle className="eye" cx="27" cy="29" r="1.6" fill="#00e8a0" stroke="none"/>
+    <circle className="eye" cx="37" cy="29" r="1.6" fill="#00e8a0" stroke="none"/>
   </svg>
 );
 
@@ -1937,6 +2004,7 @@ function AIPage({ cases, network, sound }) {
   });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [online, setOnline] = useState(false); // default offline
   const ctxRef = useRef({});
   const endRef = useRef(null);
   const timer = useRef(null);
@@ -1978,24 +2046,16 @@ function AIPage({ cases, network, sound }) {
     q = (q || "").trim();
     if (!q || busy) return;
 
-    let useAI = false;
+    // strip optional /ai prefix for cleaner message when online
     let message = q;
     if (q.toLowerCase().startsWith("/ai")) {
-      useAI = true;
-      message = q.slice(3).trim();
-      if (!message) {
-        setMsgs(m => [...m, { role: "user", text: q }, { role: "ai", text: "بعد از /ai پیام خود را بنویس." }]);
-        return;
-      }
-    } else {
-      const words = q.split(/\s+/).filter(Boolean);
-      if (words.length > 10) useAI = true;
+      message = q.slice(3).trim() || q;
     }
 
     setMsgs(m => [...m, { role: "user", text: q }]);
     setInput(""); setBusy(true); sfx("click", sound);
 
-    if (useAI) {
+    if (online) {
       try {
         const history = (histRef.current || []).slice(-10);
         const res = await fetch("https://wolf.mohammadhs200314.workers.dev/ai/chat", {
@@ -2008,6 +2068,8 @@ function AIPage({ cases, network, sound }) {
         const reply = (data && data.response) ? String(data.response) : "پاسخی دریافت نشد.";
         setMsgs(m => [...m, { role: "ai", text: reply }]);
         persistHistory([...history, { role: "user", content: message }, { role: "assistant", content: reply }]);
+        // learn for offline reuse
+        try { Learned.remember(message, reply); } catch (_) {}
         setBusy(false);
       } catch (err) {
         setMsgs(m => [...m, { role: "ai", text: "اتصال به هوش مصنوعی برقرار نشد. از موتور آفلاین استفاده می‌شود" }]);
@@ -2024,9 +2086,26 @@ function AIPage({ cases, network, sound }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
         <div style={{ color: "var(--accent)" }}><WolfLive /></div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 17, color: "var(--accent)" }}>گرگ</div>
-          <div style={{ fontSize: 11, color: "var(--text2)" }}>دستیار هیبرید · /ai یا پیام بلند → آنلاین · کوتاه → آفلاین · تاریخچه محلی</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "var(--accent)" }}>گرگ</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: online ? "var(--accent)" : "var(--text2)", fontWeight: 600 }}>
+                {online ? "آنلاین" : "آفلاین"}
+              </span>
+              <button
+                className={`toggle ${online ? "on" : ""}`}
+                title={online ? "حالت آنلاین" : "حالت آفلاین"}
+                onClick={() => { sfx("click", sound); setOnline(o => !o); }}
+                aria-label="سوییچ آنلاین/آفلاین"
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text2)" }}>
+            {online
+              ? "متصل به Worker · پاسخ‌ها برای آفلاین ذخیره می‌شوند"
+              : "موتور محلی · در صورت وجود، از پاسخ‌های یادگرفته‌شده استفاده می‌کند"}
+          </div>
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "4px 0" }}>
@@ -2044,7 +2123,7 @@ function AIPage({ cases, network, sound }) {
         ))}
       </div>
       <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-        <input className="input" placeholder="هر چیزی بنویس یا با /ai شروع کن…" value={input}
+        <input className="input" placeholder={online ? "پیام به گرگ آنلاین…" : "پیام به موتور آفلاین…"} value={input}
           onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && ask(input)} disabled={busy} autoComplete="off" />
         <button className="btn btn-primary" onClick={() => ask(input)} disabled={busy}>ارسال</button>
       </div>
