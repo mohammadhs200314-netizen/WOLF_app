@@ -1003,33 +1003,46 @@ function sfx(name, on) {
 
 const WolfLogo = ({ size=18 }) => (
   <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-    <path d="M6 12 L4 3 L11 9 Z" fill="currentColor" opacity="0.9"/>
-    <path d="M26 12 L28 3 L21 9 Z" fill="currentColor" opacity="0.9"/>
-    <ellipse cx="16" cy="16" rx="11" ry="10" fill="none" stroke="currentColor" strokeWidth="1.6"/>
-    <path d="M11 18 Q16 24 21 18" fill="none" stroke="currentColor" strokeWidth="1.4"/>
-    <ellipse cx="16" cy="20.5" rx="2.2" ry="1.4" fill="currentColor" opacity="0.7"/>
-    <circle cx="11.5" cy="13.5" r="1.6" fill="currentColor"/>
-    <circle cx="20.5" cy="13.5" r="1.6" fill="currentColor"/>
-    <circle cx="11.8" cy="13.2" r="0.5" fill="#00e8a0"/>
-    <circle cx="20.8" cy="13.2" r="0.5" fill="#00e8a0"/>
-    <path d="M8.5 11 Q11.5 9.5 14 11" fill="none" stroke="currentColor" strokeWidth="1.1" opacity="0.6"/>
-    <path d="M18 11 Q20.5 9.5 23.5 11" fill="none" stroke="currentColor" strokeWidth="1.1" opacity="0.6"/>
+    {/* sharper pointed wolf ears */}
+    <path d="M7 13 L3 1.5 L12 9.5 Z" fill="currentColor" opacity="0.95"/>
+    <path d="M25 13 L29 1.5 L20 9.5 Z" fill="currentColor" opacity="0.95"/>
+    {/* elongated angular snout / head outline - neon stroke */}
+    <path d="M6.5 14.5 C6.5 9 10.5 6 16 6 C21.5 6 25.5 9 25.5 14.5 C25.5 18.5 23 21.5 20 23.5 L16 27 L12 23.5 C9 21.5 6.5 18.5 6.5 14.5 Z"
+      fill="none" stroke="#00c4ff" strokeWidth="1.5" opacity="0.9"/>
+    {/* inner face glow */}
+    <path d="M8 15 C8 10.5 11.2 8 16 8 C20.8 8 24 10.5 24 15 C24 18.2 21.8 20.8 19.2 22.5 L16 25 L12.8 22.5 C10.2 20.8 8 18.2 8 15 Z"
+      fill="none" stroke="#00e8a0" strokeWidth="0.9" opacity="0.55"/>
+    {/* elongated snout lines */}
+    <path d="M12 18.5 L16 22.5 L20 18.5" fill="none" stroke="#00e8a0" strokeWidth="1.3"/>
+    <path d="M13.5 19.8 L16 21.8 L18.5 19.8" fill="none" stroke="#00c4ff" strokeWidth="0.8" opacity="0.7"/>
+    {/* nose */}
+    <ellipse cx="16" cy="20.8" rx="1.8" ry="1.2" fill="#00e8a0" opacity="0.85"/>
+    {/* neon eyes */}
+    <circle cx="11.2" cy="13.2" r="2.1" fill="#00e8a0"/>
+    <circle cx="20.8" cy="13.2" r="2.1" fill="#00e8a0"/>
+    <circle cx="11.5" cy="12.9" r="0.7" fill="#04120c"/>
+    <circle cx="21.1" cy="12.9" r="0.7" fill="#04120c"/>
+    <circle cx="11.7" cy="12.6" r="0.35" fill="#00c4ff"/>
+    <circle cx="21.3" cy="12.6" r="0.35" fill="#00c4ff"/>
+    {/* brow ridges */}
+    <path d="M8 11.2 Q11.5 9.2 14.2 11" fill="none" stroke="#00c4ff" strokeWidth="1.1" opacity="0.75"/>
+    <path d="M17.8 11 Q20.5 9.2 24 11.2" fill="none" stroke="#00c4ff" strokeWidth="1.1" opacity="0.75"/>
   </svg>
 );
 
 const WolfLive = () => (
   <svg className="wolf-live" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.4">
-    <path className="ear-l" d="M6 12 L3.5 2.5 L11 9 Z" fill="currentColor" stroke="none" opacity="0.85"/>
-    <path className="ear-r" d="M26 12 L28.5 2.5 L21 9 Z" fill="currentColor" stroke="none" opacity="0.85"/>
-    <ellipse cx="16" cy="16.5" rx="11.5" ry="10.5" />
-    <path d="M10.5 18.5 Q16 25 21.5 18.5" />
-    <ellipse cx="16" cy="21" rx="2.4" ry="1.5" fill="currentColor" stroke="none" opacity="0.65"/>
-    <circle className="eye" cx="11.5" cy="13.5" r="1.8" fill="#00e8a0" stroke="none"/>
-    <circle className="eye" cx="20.5" cy="13.5" r="1.8" fill="#00e8a0" stroke="none"/>
-    <circle cx="12" cy="13.2" r="0.55" fill="#fff" stroke="none"/>
-    <circle cx="21" cy="13.2" r="0.55" fill="#fff" stroke="none"/>
-    <path d="M8 11 Q11.5 9 14.5 11" opacity="0.5"/>
-    <path d="M17.5 11 Q20.5 9 24 11" opacity="0.5"/>
+    <path className="ear-l" d="M7 13 L3 1.5 L12 9.5 Z" fill="currentColor" stroke="none" opacity="0.9"/>
+    <path className="ear-r" d="M25 13 L29 1.5 L20 9.5 Z" fill="currentColor" stroke="none" opacity="0.9"/>
+    <path d="M6.5 14.5 C6.5 9 10.5 6 16 6 C21.5 6 25.5 9 25.5 14.5 C25.5 18.5 23 21.5 20 23.5 L16 27 L12 23.5 C9 21.5 6.5 18.5 6.5 14.5 Z" stroke="#00c4ff" strokeWidth="1.4" fill="none"/>
+    <path d="M12 18.5 L16 22.5 L20 18.5" stroke="#00e8a0" strokeWidth="1.2"/>
+    <ellipse cx="16" cy="20.8" rx="1.8" ry="1.2" fill="#00e8a0" stroke="none" opacity="0.8"/>
+    <circle className="eye" cx="11.2" cy="13.2" r="2" fill="#00e8a0" stroke="none"/>
+    <circle className="eye" cx="20.8" cy="13.2" r="2" fill="#00e8a0" stroke="none"/>
+    <circle cx="11.5" cy="12.9" r="0.6" fill="#04120c" stroke="none"/>
+    <circle cx="21.1" cy="12.9" r="0.6" fill="#04120c" stroke="none"/>
+    <path d="M8 11.2 Q11.5 9.2 14.2 11" stroke="#00c4ff" opacity="0.7"/>
+    <path d="M17.8 11 Q20.5 9.2 24 11.2" stroke="#00c4ff" opacity="0.7"/>
   </svg>
 );
 
@@ -1904,33 +1917,105 @@ function MapPage({ cases, sound }) {
 }
 
 function AIPage({ cases, network, sound }) {
-  const [msgs, setMsgs] = useState(() => [{ role: "ai", text: Brain.intro() }]);
+  const loadHistory = () => {
+    try {
+      const raw = localStorage.getItem("wolf_ai_history");
+      const h = raw ? JSON.parse(raw) : [];
+      return Array.isArray(h) ? h.slice(-10) : [];
+    } catch { return []; }
+  };
+  const [chatHistory, setChatHistory] = useState(loadHistory);
+  const [msgs, setMsgs] = useState(() => {
+    const hist = loadHistory();
+    if (hist.length > 0) {
+      return hist.map(m => ({
+        role: m.role === "assistant" ? "ai" : "user",
+        text: m.content
+      }));
+    }
+    return [{ role: "ai", text: Brain.intro() }];
+  });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const ctxRef = useRef({});
   const endRef = useRef(null);
   const timer = useRef(null);
+  const histRef = useRef(chatHistory);
+  histRef.current = chatHistory;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  const persistHistory = (next) => {
+    const trimmed = next.slice(-10);
+    setChatHistory(trimmed);
+    histRef.current = trimmed;
+    try { localStorage.setItem("wolf_ai_history", JSON.stringify(trimmed)); } catch {}
+  };
+
   const env = { cases, network, DANGER_LEVELS, CASE_STATUS, CASE_CATEGORIES, PROVINCES };
 
-  const ask = (q) => {
-    q = (q || "").trim();
-    if (!q || busy) return;
-    setMsgs(m => [...m, { role: "user", text: q }]);
-    setInput(""); setBusy(true); sfx("click", sound);
+  const offlineReply = (q) => {
     let r;
     try { r = Brain.reply(q, ctxRef.current, env); }
     catch { r = { text: "یک خطای داخلی رخ داد؛ دوباره بپرس.", ctx: ctxRef.current }; }
     ctxRef.current = r.ctx;
-    const delay = Math.min(1200, 300 + r.text.length * 5);
+    const delay = Math.min(1200, 300 + (r.text || "").length * 5);
     timer.current = setTimeout(() => {
-      if (r.clear) { setMsgs([{ role: "ai", text: Brain.intro() }]); ctxRef.current = { userName: r.ctx.userName }; }
-      else setMsgs(m => [...m, { role: "ai", text: r.text }]);
+      if (r.clear) {
+        setMsgs([{ role: "ai", text: Brain.intro() }]);
+        ctxRef.current = { userName: r.ctx.userName };
+        persistHistory([]);
+      } else {
+        setMsgs(m => [...m, { role: "ai", text: r.text }]);
+        persistHistory([...(histRef.current || []), { role: "user", content: q }, { role: "assistant", content: r.text }]);
+      }
       setBusy(false);
     }, delay);
+  };
+
+  const ask = async (q) => {
+    q = (q || "").trim();
+    if (!q || busy) return;
+
+    let useAI = false;
+    let message = q;
+    if (q.toLowerCase().startsWith("/ai")) {
+      useAI = true;
+      message = q.slice(3).trim();
+      if (!message) {
+        setMsgs(m => [...m, { role: "user", text: q }, { role: "ai", text: "بعد از /ai پیام خود را بنویس." }]);
+        return;
+      }
+    } else {
+      const words = q.split(/\s+/).filter(Boolean);
+      if (words.length > 10) useAI = true;
+    }
+
+    setMsgs(m => [...m, { role: "user", text: q }]);
+    setInput(""); setBusy(true); sfx("click", sound);
+
+    if (useAI) {
+      try {
+        const history = (histRef.current || []).slice(-10);
+        const res = await fetch("https://wolf.mohammadhs200314.workers.dev/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, history })
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const reply = (data && data.response) ? String(data.response) : "پاسخی دریافت نشد.";
+        setMsgs(m => [...m, { role: "ai", text: reply }]);
+        persistHistory([...history, { role: "user", content: message }, { role: "assistant", content: reply }]);
+        setBusy(false);
+      } catch (err) {
+        setMsgs(m => [...m, { role: "ai", text: "اتصال به هوش مصنوعی برقرار نشد. از موتور آفلاین استفاده می‌شود" }]);
+        offlineReply(message || q);
+      }
+    } else {
+      offlineReply(q);
+    }
   };
 
   const quick = ["یه جوک بگو", "ساعت و تاریخ", "خلاصه وضعیت", "پرونده‌های پرخطر", "یه رمز قوی بساز", "چند روز تا نوروز؟", "راهنما"];
@@ -1941,7 +2026,7 @@ function AIPage({ cases, network, sound }) {
         <div style={{ color: "var(--accent)" }}><WolfLive /></div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 17, color: "var(--accent)" }}>گرگ</div>
-          <div style={{ fontSize: 11, color: "var(--text2)" }}>دستیار آفلاین · گفتگو · تحلیل · مکالمه‌ها ذخیره نمی‌شوند</div>
+          <div style={{ fontSize: 11, color: "var(--text2)" }}>دستیار هیبرید · /ai یا پیام بلند → آنلاین · کوتاه → آفلاین · تاریخچه محلی</div>
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "4px 0" }}>
@@ -1959,7 +2044,7 @@ function AIPage({ cases, network, sound }) {
         ))}
       </div>
       <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-        <input className="input" placeholder="هر چیزی بنویس: گپ، محاسبه، تاریخ، پرونده…" value={input}
+        <input className="input" placeholder="هر چیزی بنویس یا با /ai شروع کن…" value={input}
           onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && ask(input)} disabled={busy} autoComplete="off" />
         <button className="btn btn-primary" onClick={() => ask(input)} disabled={busy}>ارسال</button>
       </div>
