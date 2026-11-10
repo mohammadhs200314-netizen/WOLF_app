@@ -2,10 +2,50 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; media-src data: blob:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://telegram.org https://unpkg.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; media-src data: blob:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <meta name="referrer" content="no-referrer" />
   <meta name="robots" content="noindex,nofollow" />
-  <script>if (window.top !== window.self) { document.documentElement.innerHTML = ""; }</script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    /*
+      WOLF EARLY CLIENT GATE — NOT SERVER AUTHENTICATION.
+      Telegram initData cannot be cryptographically verified in a browser-only file:
+      the HMAC secret is the bot token and must never be shipped to the client.
+      initDataUnsafe / parsed initData values are client-controlled inputs.
+      This gate is only a fail-closed UI hurdle, not a security boundary.
+    */
+    (function initializeSecurity() {
+      "use strict";
+      const ALLOWED_USER_ID = 5511641524;
+      let allowed = false;
+      try {
+        const tg = window.Telegram && window.Telegram.WebApp;
+        const raw = tg && typeof tg.initData === "string" ? tg.initData : "";
+        const unsafeId = tg && tg.initDataUnsafe && tg.initDataUnsafe.user
+          ? tg.initDataUnsafe.user.id : null;
+        const params = new URLSearchParams(raw);
+        const userField = params.get("user");
+        const rawUser = userField ? JSON.parse(userField) : null;
+        const rawId = rawUser && rawUser.id;
+
+        // Consistency check only. Presence of hash is NOT signature verification.
+        allowed = raw.length > 0 &&
+          params.has("hash") &&
+          Number.isSafeInteger(Number(rawId)) &&
+          Number(rawId) === ALLOWED_USER_ID &&
+          Number(unsafeId) === ALLOWED_USER_ID;
+      } catch (_) { allowed = false; }
+
+      window.__WOLF_TG_GATE__ = allowed;
+      if (!allowed) {
+        try {
+          document.documentElement.innerHTML = "";
+          document.documentElement.style.display = "none";
+        } catch (_) {}
+        try { window.stop(); } catch (_) {}
+      }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>گرگ | سامانه امنیتی شناسایی و مدیریت پرونده</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -372,9 +412,13 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 const STORAGE = { settings: "gorg_s_v3" };
 
 function load(key, fallback) {
+  if (window.__WOLF_TG_GATE__ !== true) return fallback;
   try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch { return fallback; }
 }
-function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+function save(key, val) {
+  if (window.__WOLF_TG_GATE__ !== true) return;
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
 
 /* ================= VAULT: AES-256-GCM + PBKDF2-SHA256 ================= */
 const VAULT_KEY = "gorg_vault_v4";
@@ -2247,7 +2291,11 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+if (window.__WOLF_TG_GATE__ === true) {
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+} else {
+  try { document.documentElement.innerHTML = ""; } catch (_) {}
+}
 </script>
 </body>
 </html>
