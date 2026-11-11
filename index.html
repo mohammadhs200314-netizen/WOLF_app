@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://telegram.org https://unpkg.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com data:; img-src data: blob: https:; media-src data: blob: https:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://telegram.org https://unpkg.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; media-src data: blob:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <meta name="referrer" content="no-referrer" />
   <meta name="robots" content="noindex,nofollow" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -17,63 +17,37 @@
     (function initializeSecurity() {
       "use strict";
       const ALLOWED_USER_ID = 5511641524;
-      const startedAt = Date.now();
-      let readyCalled = false;
+      let allowed = false;
+      try {
+        const tg = window.Telegram && window.Telegram.WebApp;
+        const raw = tg && typeof tg.initData === "string" ? tg.initData : "";
+        const unsafeId = tg && tg.initDataUnsafe && tg.initDataUnsafe.user
+          ? tg.initDataUnsafe.user.id : null;
+        const params = new URLSearchParams(raw);
+        const userField = params.get("user");
+        const rawUser = userField ? JSON.parse(userField) : null;
+        const rawId = rawUser && rawUser.id;
 
-      function inspectTelegram() {
-        let reason = "unknown";
+        // Consistency check only. Presence of hash is NOT signature verification.
+        allowed = raw.length > 0 &&
+          params.has("hash") &&
+          Number.isSafeInteger(Number(rawId)) &&
+          Number(rawId) === ALLOWED_USER_ID &&
+          Number(unsafeId) === ALLOWED_USER_ID;
+      } catch (_) { allowed = false; }
+
+      window.__WOLF_TG_GATE__ = allowed;
+      if (!allowed) {
         try {
-          const tg = window.Telegram && window.Telegram.WebApp;
-          if (!tg) return { allowed: false, pending: true, reason: "sdk_missing" };
-          if (!readyCalled && typeof tg.ready === "function") {
-            try { tg.ready(); } catch (_) {}
-            readyCalled = true;
-          }
-          const raw = typeof tg.initData === "string" ? tg.initData : "";
-          if (!raw) return { allowed: false, pending: true, reason: "initdata_missing" };
-
-          const params = new URLSearchParams(raw);
-          const userField = params.get("user");
-          const rawUser = userField ? JSON.parse(userField) : null;
-          const rawId = rawUser && rawUser.id;
-          const unsafeId = tg.initDataUnsafe && tg.initDataUnsafe.user
-            ? tg.initDataUnsafe.user.id : null;
-
-          if (!params.has("hash")) reason = "hash_missing";
-          else if (!Number.isSafeInteger(Number(rawId))) reason = "user_invalid";
-          else if (Number(rawId) !== ALLOWED_USER_ID) reason = "user_not_allowed";
-          else if (Number(unsafeId) !== ALLOWED_USER_ID) reason = "user_context_mismatch";
-          else return { allowed: true, pending: false, reason: "ok" };
-          return { allowed: false, pending: false, reason: reason };
-        } catch (_) {
-          return { allowed: false, pending: false, reason: "initdata_parse_error" };
-        }
+          document.documentElement.innerHTML = "";
+          document.documentElement.style.display = "none";
+        } catch (_) {}
+        try { window.stop(); } catch (_) {}
       }
-
-      // Telegram's WebView bridge can become available just after the page script.
-      // Wait briefly for initData; never grant access unless every original check passes.
-      window.__WOLF_TG_GATE__ = false;
-      window.__WOLF_TG_GATE_REASON__ = "pending";
-      window.__WOLF_TG_GATE_PROMISE__ = new Promise(function (resolve) {
-        function tick() {
-          const result = inspectTelegram();
-          if (result.allowed || !result.pending || Date.now() - startedAt >= 2500) {
-            if (result.pending) result.reason = result.reason === "sdk_missing" ? "sdk_missing" : "initdata_missing";
-            window.__WOLF_TG_GATE__ = result.allowed === true;
-            window.__WOLF_TG_GATE_REASON__ = result.reason;
-            resolve({ allowed: result.allowed === true, reason: result.reason });
-            return;
-          }
-          window.setTimeout(tick, 50);
-        }
-        tick();
-      });
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>گرگ | سامانه امنیتی شناسایی و مدیریت پرونده</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -307,90 +281,10 @@
     }
     .banner-err { background: #ff3b6b18; border-bottom: 1px solid #ff3b6b55; color: var(--danger); padding: 8px 16px; font-size: 12px; flex-shrink: 0; }
     @media print { body * { display: none !important; } }
-    @keyframes pulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.5); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 1; }
-    }
   </style>
 </head>
 <body>
 <div id="root"></div>
-<script>
-/* WOLF startup diagnostics. This plain JavaScript runs even if React/Babel fails. */
-(function () {
-  "use strict";
-  var root = document.getElementById("root");
-  if (!root) return;
-  function show(title, detail) {
-    if (root.dataset.appStarted === "1") return;
-    root.textContent = "";
-    var panel = document.createElement("div");
-    panel.style.cssText = "min-height:100%;width:100%;display:flex;align-items:center;justify-content:center;padding:24px;background:#070b12;color:#dce4f0;font-family:system-ui,sans-serif;text-align:center";
-    var box = document.createElement("div");
-    box.style.cssText = "max-width:480px;border:1px solid #243044;border-radius:14px;background:#0f1624;padding:24px;line-height:2;overflow-wrap:anywhere";
-    var h = document.createElement("div"); h.textContent = title;
-    h.style.cssText = "font-size:18px;font-weight:700;color:#00c4ff;margin-bottom:12px";
-    var p = document.createElement("div"); p.textContent = detail;
-    p.style.cssText = "font-size:14px;color:#dce4f0;white-space:pre-wrap";
-    var note = document.createElement("div");
-    note.textContent = "دسترسی همچنان قفل است؛ هیچ بررسی امنیتی یا رمز عبوری دور زده نشده است.";
-    note.style.cssText = "font-size:12px;color:#8b9bb4;margin-top:16px";
-    box.appendChild(h); box.appendChild(p); box.appendChild(note);
-    panel.appendChild(box); root.appendChild(panel);
-  }
-  window.__WOLF_SHOW_DIAGNOSTIC__ = show;
-  show("در حال بررسی ورود امن تلگرام…", "در حال دریافت اطلاعات ورود از مینی‌اپ تلگرام هستیم. لطفاً چند لحظه صبر کنید.");
-  var gateMessages = {
-    sdk_missing: "کتابخانه رسمی تلگرام بارگذاری نشده است. دسترسی به telegram.org یا اتصال اینترنت را بررسی کنید.",
-    initdata_missing: "تلگرام اطلاعات ورود (initData) نفرستاده است. برنامه را از دکمه وب‌اپ داخل ربات اجرا کنید.",
-    hash_missing: "فیلد hash در اطلاعات ورود تلگرام وجود ندارد. وب‌اپ را ببندید و دوباره از دکمه ربات باز کنید.",
-    user_invalid: "شناسه کاربر در اطلاعات دریافتی تلگرام معتبر نیست.",
-    user_not_allowed: "این حساب تلگرام در فهرست شناسه‌های مجاز این نسخه نیست.",
-    user_context_mismatch: "شناسه کاربر در دو بخش اطلاعات تلگرام با هم مطابقت ندارد.",
-    initdata_parse_error: "خواندن اطلاعات ورود تلگرام با خطا روبه‌رو شد.",
-    unknown: "ورود تلگرام تأیید نشد."
-  };
-  function installRuntimeDiagnostics() {
-    window.addEventListener("error", function (e) {
-      if (root.dataset.appStarted === "1") return;
-      var target = e && e.target;
-      var detail = (e && e.message) ? e.message : "بارگذاری یکی از فایل‌های لازم ناموفق بود.";
-      if (target && (target.src || target.href)) detail += "\nمنبع: " + (target.src || target.href);
-      show("خطا در راه‌اندازی برنامه", detail);
-    }, true);
-    window.addEventListener("unhandledrejection", function (e) {
-      if (root.dataset.appStarted === "1") return;
-      var r = e && e.reason;
-      show("خطای اجرای برنامه", r ? String(r.message || r) : "یک عملیات ناهمگام ناموفق بود.");
-    });
-    document.addEventListener("securitypolicyviolation", function (e) {
-      if (root.dataset.appStarted === "1") return;
-      show("سیاست امنیتی بارگذاری یک منبع را مسدود کرد",
-        "دستور: " + e.violatedDirective + "\nمنبع: " + e.blockedURI);
-    });
-    window.setTimeout(function () {
-      if (root.dataset.appStarted !== "1") {
-        var missing = [];
-        if (!window.React) missing.push("React");
-        if (!window.ReactDOM) missing.push("ReactDOM");
-        if (!window.Babel) missing.push("Babel");
-        show("رابط برنامه راه‌اندازی نشد", missing.length
-          ? "کتابخانه بارگذاری‌نشده: " + missing.join(", ")
-          : "کد رابط اجرا نشد یا خطای جاوااسکریپت رخ داده است. اتصال CDNها و خطای اجرای اسکریپت را بررسی کنید.");
-      }
-    }, 10000);
-  }
-  if (window.__WOLF_TG_GATE_PROMISE__ && typeof window.__WOLF_TG_GATE_PROMISE__.then === "function") {
-    window.__WOLF_TG_GATE_PROMISE__.then(function (gate) {
-      if (!gate.allowed) show("ورود امن تلگرام تأیید نشد", gateMessages[gate.reason] || gateMessages.unknown);
-      else { root.textContent = ""; installRuntimeDiagnostics(); }
-    });
-  } else {
-    show("خطای راه‌اندازی", "بررسی اولیه تلگرام اجرا نشد.");
-  }
-})();
-</script>
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -1389,7 +1283,6 @@ function Sidebar({ active, setActive, sound, onLogout }) {
     {id:"cases", label:"پرونده‌ها", Icon:I.Cases},
     {id:"network", label:"شبکه", Icon:I.Network},
     {id:"map", label:"نقشه", Icon:I.Map},
-    {id:"geo", label:"نقطه‌زنی", Icon:I.Map},
     {id:"ai", label:"گرگ", Icon:()=><WolfLogo size={18} />},
     {id:"settings", label:"تنظیمات", Icon:I.Settings},
   ];
@@ -1446,8 +1339,6 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
     socials:{x:"",telegram:"",instagram:"",other:""},
     relatedPeople:"", events:"", crimeType:"", dangerLevel:"medium",
     status:"open", category:"history", notes:"", extraNotes:"",
-    orgAffiliation:"", orgRole:"", influenceLevel:"",
-    latitude:"", longitude:"",
     media:{photos:[],videos:[],audios:[]}
   };
   const [f, setF] = useState(initial ? {...empty, ...initial} : empty);
@@ -1511,16 +1402,6 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
         </div>
       </div>
       <div><label className="label">آدرس کامل</label><textarea className="textarea" rows={2} value={f.address} onChange={e=>set("address",e.target.value)} /></div>
-      <div className="g2">
-  <div>
-    <label className="label">عرض جغرافیایی (Latitude)</label>
-    <input className="input" value={f.latitude || ""} onChange={e=>set("latitude",e.target.value)} placeholder="مثلاً 35.6892" />
-  </div>
-  <div>
-    <label className="label">طول جغرافیایی (Longitude)</label>
-    <input className="input" value={f.longitude || ""} onChange={e=>set("longitude",e.target.value)} placeholder="مثلاً 51.3890" />
-  </div>
-</div>
       <div className="panel" style={{padding:12}}>
         <div className="label" style={{marginBottom:8, color:"var(--accent2)"}}>فضای مجازی</div>
         <div className="g2">
@@ -1624,7 +1505,7 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
 }
 
 function CasesPage({ cases, setCases, sound }) {
-  const [filter, setFilter] = useState({status:"all", category:"all", danger:"all", org:"all", q:""});
+  const [filter, setFilter] = useState({status:"all", category:"all", danger:"all", q:""});
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
@@ -1633,7 +1514,6 @@ function CasesPage({ cases, setCases, sound }) {
     if (filter.status!=="all" && c.status!==filter.status) return false;
     if (filter.category!=="all" && c.category!==filter.category) return false;
     if (filter.danger!=="all" && c.dangerLevel!==filter.danger) return false;
-    if (filter.org!=="all" && c.orgAffiliation!==filter.org) return false;
     if (filter.q) {
       const q = filter.q.toLowerCase();
       const s = `${c.firstName} ${c.lastName} ${c.nickname} ${c.nationalId} ${c.phone} ${c.crimeType} ${c.province} ${c.city}`.toLowerCase();
@@ -1683,17 +1563,6 @@ function CasesPage({ cases, setCases, sound }) {
           <option value="all">سطح خطر</option>
           {DANGER_LEVELS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}
         </select>
-        <select className="select" style={{width:"auto", minWidth:140}} value={filter.org} onChange={e=>setFilter(f=>({...f,org:e.target.value}))}>
-          <option value="all">وابستگی سازمانی</option>
-          <option value="مستقل/غیرحکومتی">مستقل/غیرحکومتی</option>
-          <option value="قوه قضائیه">قوه قضائیه</option>
-          <option value="سپاه">سپاه</option>
-          <option value="بسیج">بسیج</option>
-          <option value="نیروی انتظامی">نیروی انتظامی</option>
-          <option value="وزارت اطلاعات">وزارت اطلاعات</option>
-          <option value="مجلس">مجلس</option>
-          <option value="سایر">سایر</option>
-        </select>
       </div>
       <div style={{flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:8}}>
         {filtered.length===0 && <div style={{textAlign:"center", padding:48, color:"var(--text2)"}}>پرونده‌ای یافت نشد</div>}
@@ -1705,7 +1574,6 @@ function CasesPage({ cases, setCases, sound }) {
             <div style={{flex:1, minWidth:0}}>
               <div style={{fontWeight:600, fontSize:13}} className="truncate">
                 {c.firstName} {c.lastName}{c.nickname?` · ${c.nickname}`:""}
-                {c.orgAffiliation && c.orgAffiliation!=="مستقل/غیرحکومتی" && <span style={{display:"inline-block", marginRight:8, padding:"2px 7px", borderRadius:5, background:"#ff3b6b", color:"#fff", fontSize:10, fontWeight:600}}>سازمانی</span>}
               </div>
               <div style={{display:"flex", gap:8, flexWrap:"wrap", marginTop:3, fontSize:11, color:"var(--text2)"}}>
                 <span>{c.crimeType||"—"}</span>
@@ -1757,13 +1625,6 @@ function CasesPage({ cases, setCases, sound }) {
               {viewing.events && <div style={{marginTop:8}}><span className="text-muted">وقایع: </span>{viewing.events}</div>}
               {viewing.relatedPeople && <div style={{marginTop:8}}><span className="text-muted">افراد مرتبط: </span>{viewing.relatedPeople}</div>}
               {viewing.notes && <div style={{marginTop:8}}><span className="text-muted">یادداشت: </span>{viewing.notes}</div>}
-              {viewing.latitude && viewing.longitude && (
-  <div style={{marginTop:12}}>
-    <button className="btn btn-primary" onClick={() => { setViewing(null); setActive("geo"); }}>
-      📍 مشاهده روی نقشه
-    </button>
-  </div>
-)}
               {viewing.media?.photos?.length>0 && (
                 <div style={{display:"flex", gap:8, flexWrap:"wrap", marginTop:12}}>
                   {viewing.media.photos.map((p,i)=><img key={i} src={p.data} alt="" style={{width:72,height:72,objectFit:"cover",borderRadius:6,border:"1px solid var(--border)"}} />)}
@@ -2389,71 +2250,7 @@ function AIPage({ cases, network, sound }) {
   );
 }
 
-function GeoPage({ cases, sound }) {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    if (mapInstanceRef.current) return;
-
-    // ساخت نقشه
-    const map = L.map(mapRef.current, { minZoom: 5, maxZoom: 18 }).setView([32.4279, 53.6880], 5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
-    mapInstanceRef.current = map;
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, []);
-
-  // اضافه کردن مارکرها
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    // پاک کردن مارکرهای قبلی (برای جلوگیری از تکرار)
-    map.eachLayer((layer) => {
-      if (layer instanceof L.Marker) {
-        map.removeLayer(layer);
-      }
-    });
-
-    cases.forEach(c => {
-      if (c.latitude && c.longitude) {
-        const lat = parseFloat(c.latitude);
-        const lng = parseFloat(c.longitude);
-        if (isNaN(lat) || isNaN(lng)) return;
-
-        // ساخت مارکر با انیمیشن CSS
-        const icon = L.divIcon({
-          className: 'custom-marker',
-          html: `<div style="width: 20px; height: 20px; background: #ff3b6b; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 10px #ff3b6b; animation: pulse 1.5s infinite;"></div>`,
-          iconSize: [20, 20],
-          iconAnchor: [10, 10]
-        });
-
-        L.marker([lat, lng], { icon })
-          .addTo(map)
-          .bindPopup(`<b>${c.firstName} ${c.lastName}</b><br/>${c.crimeType || ""}`);
-      }
-    });
-  }, [cases]);
-
-  return (
-    <div style={{display:"flex", flexDirection:"column", height:"100%", gap:14}}>
-      <h1 style={{fontSize:18, fontWeight:700, color:"var(--accent2)"}}>نقطه‌زنی (نقشه جغرافیایی)</h1>
-      <div ref={mapRef} style={{flex:1, minHeight:"500px", borderRadius:10, border:"1px solid var(--border)", zIndex:1}}></div>
-    </div>
-  );
-}
-
-     function HomePage({ cases, network, setActive, sound }) {
+function HomePage({ cases, network, setActive, sound }) {
   const open = cases.filter(c=>c.status==="open").length;
   const crit = cases.filter(c=>c.dangerLevel==="critical"||c.dangerLevel==="high").length;
   const recent = [...cases].sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt)).slice(0,5);
@@ -2762,7 +2559,6 @@ function App() {
           {active === "cases" && <CasesPage cases={cases} setCases={setCases} sound={settings.sound} />}
           {active === "network" && <NetworkPage network={network} setNetwork={setNetwork} cases={cases} sound={settings.sound} />}
           {active === "map" && <MapPage cases={cases} sound={settings.sound} />}
-          {active === "geo" && <GeoPage cases={cases} sound={settings.sound} />}
           {active === "ai" && settings.ai && <AIPage cases={cases} network={network} sound={settings.sound} />}
           {active === "ai" && !settings.ai && <div style={{ textAlign: "center", padding: 60, color: "var(--text2)" }}>دستیار غیرفعال است</div>}
           {active === "settings" && <SettingsPage settings={settings} setSettings={setSettings} sound={settings.sound} onLock={() => lockNow("lock_manual")} audit={audit} api={api} />}
@@ -2778,24 +2574,10 @@ function App() {
   );
 }
 
-if (window.__WOLF_TG_GATE_PROMISE__ && typeof window.__WOLF_TG_GATE_PROMISE__.then === "function") {
-  window.__WOLF_TG_GATE_PROMISE__.then(function (gate) {
-    if (!gate.allowed) return; // Fail closed: no protected UI for an unapproved user.
-    try {
-      document.getElementById("root").textContent = "";
-      if (!window.React || !window.ReactDOM || typeof ReactDOM.createRoot !== "function") {
-        throw new Error("کتابخانه React یا ReactDOM بارگذاری نشده است.");
-      }
-      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-      document.getElementById("root").dataset.appStarted = "1";
-    } catch (err) {
-      if (window.__WOLF_SHOW_DIAGNOSTIC__) {
-        window.__WOLF_SHOW_DIAGNOSTIC__("خطا هنگام ساخت رابط برنامه", err && err.message ? err.message : String(err));
-      }
-    }
-  });
-} else if (window.__WOLF_SHOW_DIAGNOSTIC__) {
-  window.__WOLF_SHOW_DIAGNOSTIC__("خطای راه‌اندازی", "بررسی اولیه تلگرام اجرا نشد.");
+if (window.__WOLF_TG_GATE__ === true) {
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+} else {
+  try { document.documentElement.innerHTML = ""; } catch (_) {}
 }
 </script>
 </body>
