@@ -18,32 +18,34 @@
       "use strict";
       const ALLOWED_USER_ID = 5511641524;
       let allowed = false;
+      let gateReason = "unknown";
       try {
         const tg = window.Telegram && window.Telegram.WebApp;
-        const raw = tg && typeof tg.initData === "string" ? tg.initData : "";
-        const unsafeId = tg && tg.initDataUnsafe && tg.initDataUnsafe.user
-          ? tg.initDataUnsafe.user.id : null;
-        const params = new URLSearchParams(raw);
-        const userField = params.get("user");
-        const rawUser = userField ? JSON.parse(userField) : null;
-        const rawId = rawUser && rawUser.id;
+        if (!tg) {
+          gateReason = "sdk_missing";
+        } else {
+          // Notify Telegram that the Mini App has initialized. This does not bypass auth.
+          try { tg.ready(); } catch (_) {}
+          const raw = typeof tg.initData === "string" ? tg.initData : "";
+          const unsafeId = tg.initDataUnsafe && tg.initDataUnsafe.user
+            ? tg.initDataUnsafe.user.id : null;
+          const params = new URLSearchParams(raw);
+          const userField = params.get("user");
+          const rawUser = userField ? JSON.parse(userField) : null;
+          const rawId = rawUser && rawUser.id;
 
-        // Consistency check only. Presence of hash is NOT signature verification.
-        allowed = raw.length > 0 &&
-          params.has("hash") &&
-          Number.isSafeInteger(Number(rawId)) &&
-          Number(rawId) === ALLOWED_USER_ID &&
-          Number(unsafeId) === ALLOWED_USER_ID;
-      } catch (_) { allowed = false; }
+          if (!raw) gateReason = "initdata_missing";
+          else if (!params.has("hash")) gateReason = "hash_missing";
+          else if (!Number.isSafeInteger(Number(rawId))) gateReason = "user_invalid";
+          else if (Number(rawId) !== ALLOWED_USER_ID) gateReason = "user_not_allowed";
+          else if (Number(unsafeId) !== ALLOWED_USER_ID) gateReason = "user_context_mismatch";
+          else { allowed = true; gateReason = "ok"; }
+        }
+      } catch (_) { allowed = false; gateReason = "initdata_parse_error"; }
 
       window.__WOLF_TG_GATE__ = allowed;
-      if (!allowed) {
-        try {
-          document.documentElement.innerHTML = "";
-          document.documentElement.style.display = "none";
-        } catch (_) {}
-        try { window.stop(); } catch (_) {}
-      }
+      window.__WOLF_TG_GATE_REASON__ = gateReason;
+      // Fail closed without deleting the document: a diagnostic screen is shown below.
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
@@ -2682,7 +2684,37 @@ function App() {
 if (window.__WOLF_TG_GATE__ === true) {
   ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 } else {
-  try { document.documentElement.innerHTML = ""; } catch (_) {}
+  // Keep the access gate closed, but explain why instead of blanking the whole page.
+  const root = document.getElementById("root");
+  if (root) {
+    const messages = {
+      sdk_missing: "کتابخانه تلگرام بارگذاری نشده است. اتصال اینترنت یا مسدود نبودن telegram.org را بررسی کنید.",
+      initdata_missing: "اطلاعات ورود تلگرام دریافت نشده است. برنامه را فقط از دکمهٔ وب‌اپ داخل ربات باز کنید؛ لینک را مستقیم در مرورگر باز نکنید.",
+      hash_missing: "امضای همراه اطلاعات ورود تلگرام دریافت نشده است. وب‌اپ را ببندید و دوباره از داخل ربات باز کنید.",
+      user_invalid: "اطلاعات شناسهٔ کاربر از تلگرام قابل‌خواندن نیست. وب‌اپ را دوباره از داخل ربات اجرا کنید.",
+      user_not_allowed: "این حساب تلگرام در فهرست کاربران مجاز این نسخه نیست.",
+      user_context_mismatch: "شناسهٔ حساب در اطلاعات تلگرام با زمینهٔ ورود مطابقت ندارد. وب‌اپ را ببندید و دوباره اجرا کنید.",
+      initdata_parse_error: "خواندن اطلاعات ورود تلگرام ناموفق بود. وب‌اپ را دوباره از داخل ربات اجرا کنید.",
+      unknown: "ورود تلگرام تأیید نشد. وب‌اپ را دوباره از داخل ربات اجرا کنید."
+    };
+    root.innerHTML = "";
+    const panel = document.createElement("div");
+    panel.style.cssText = "min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;background:#070b12;color:#dce4f0;font-family:system-ui,sans-serif;text-align:center";
+    const content = document.createElement("div");
+    content.style.cssText = "max-width:440px;border:1px solid #243044;border-radius:14px;background:#0f1624;padding:24px;line-height:2";
+    const title = document.createElement("div");
+    title.textContent = "ورود امن تلگرام تأیید نشد";
+    title.style.cssText = "font-size:18px;font-weight:700;color:#00c4ff;margin-bottom:12px";
+    const detail = document.createElement("div");
+    detail.textContent = messages[window.__WOLF_TG_GATE_REASON__] || messages.unknown;
+    detail.style.cssText = "font-size:14px;color:#dce4f0";
+    const note = document.createElement("div");
+    note.textContent = "قفل دسترسی فعال مانده است؛ هیچ لایهٔ احراز هویت یا داده‌ای دور زده نشده است.";
+    note.style.cssText = "font-size:12px;color:#8b9bb4;margin-top:16px";
+    content.append(title, detail, note);
+    panel.appendChild(content);
+    root.appendChild(panel);
+  }
 }
 </script>
 </body>
