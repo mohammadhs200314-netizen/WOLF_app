@@ -48,6 +48,8 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>گرگ | سامانه امنیتی شناسایی و مدیریت پرونده</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -281,6 +283,11 @@
     }
     .banner-err { background: #ff3b6b18; border-bottom: 1px solid #ff3b6b55; color: var(--danger); padding: 8px 16px; font-size: 12px; flex-shrink: 0; }
     @media print { body * { display: none !important; } }
+    @keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -423,12 +430,17 @@ function save(key, val) {
 /* ================= VAULT: AES-256-GCM + PBKDF2-SHA256 ================= */
 const VAULT_KEY = "gorg_vault_v4";
 const LOCK_KEY = "gorg_lock_v4";
-const KDF_ITER = 600000;
+const KDF_ITER = 210000;
 const VAULT_AAD = new TextEncoder().encode("gorg-vault-v4");
 
 function bufToB64(buf) {
-  const bytes = new Uint8Array(buf); let s = ""; const CH = 0x8000;
-  for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  const bytes = new Uint8Array(buf);
+  const CH = 0x2000;
+  let s = "";
+  for (let i = 0; i < bytes.length; i += CH) {
+    const chunk = bytes.subarray(i, Math.min(i + CH, bytes.length));
+    s += String.fromCharCode.apply(null, chunk);
+  }
   return btoa(s);
 }
 function b64ToBuf(b64) {
@@ -485,7 +497,15 @@ const Vault = {
   persist(data) {
     const job = this._queue.then(async () => {
       if (!this._key) return;
-      localStorage.setItem(VAULT_KEY, await this._seal(data));
+      try {
+        localStorage.setItem(VAULT_KEY, await this._seal(data));
+      } catch (e) {
+        // Quota or serialization failure – rethrow so UI can show banner
+        if (e && (e.name === "QuotaExceededError" || e.code === 22 || /quota/i.test(String(e)))) {
+          throw new Error("QUOTA");
+        }
+        throw e;
+      }
     });
     this._queue = job.catch(() => {});
     return job;
@@ -1193,7 +1213,7 @@ function LoginScreen({ onSuccess, sound }) {
   const handle = async (e) => {
     e.preventDefault();
     if (loading || wait > 0) return;
-    setErr(""); setLoading(true);
+    setErr(mode === "login" ? "در حال مشتق‌سازی کلید (ممکن است چند ثانیه طول بکشد)…" : ""); setLoading(true);
     try {
       if (mode === "login") {
         let data;
@@ -1283,6 +1303,7 @@ function Sidebar({ active, setActive, sound, onLogout }) {
     {id:"cases", label:"پرونده‌ها", Icon:I.Cases},
     {id:"network", label:"شبکه", Icon:I.Network},
     {id:"map", label:"نقشه", Icon:I.Map},
+    {id:"geo", label:"نقطه‌زنی", Icon:I.Map},
     {id:"ai", label:"گرگ", Icon:()=><WolfLogo size={18} />},
     {id:"settings", label:"تنظیمات", Icon:I.Settings},
   ];
@@ -1316,7 +1337,7 @@ function Sidebar({ active, setActive, sound, onLogout }) {
   );
 }
 
-function compressImage(file, max = 1280, q = 0.8) {
+function compressImage(file, max = 900, q = 0.72) {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file); const img = new Image();
     img.onload = () => {
@@ -1339,6 +1360,8 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
     socials:{x:"",telegram:"",instagram:"",other:""},
     relatedPeople:"", events:"", crimeType:"", dangerLevel:"medium",
     status:"open", category:"history", notes:"", extraNotes:"",
+    orgAffiliation:"", orgRole:"", influenceLevel:"",
+    latitude:"", longitude:"",
     media:{photos:[],videos:[],audios:[]}
   };
   const [f, setF] = useState(initial ? {...empty, ...initial} : empty);
@@ -1349,18 +1372,27 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
   const handleMedia = async (e, type) => {
     const files = Array.from(e.target.files || []); e.target.value = "";
     if (!files.length) return;
+    const maxPerType = type === "photos" ? 8 : 3;
+    const current = (f.media[type] || []).length;
+    if (current >= maxPerType) {
+      setMediaMsg(`حداکثر ${maxPerType} فایل از این نوع مجاز است.`);
+      return;
+    }
     setMediaMsg("در حال پردازش…");
     let ok = 0; const bad = [];
     for (const file of files) {
+      if (current + ok >= maxPerType) break;
       try {
         let data;
-        if (type === "photos") data = await compressImage(file);
-        else {
-          if (file.size > 3 * 1024 * 1024) throw new Error("size");
+        if (type === "photos") {
+          if (file.size > 6 * 1024 * 1024) throw new Error("size");
+          data = await compressImage(file);
+        } else {
+          if (file.size > 2 * 1024 * 1024) throw new Error("size");
           data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
         }
         setF(p => ({...p, media:{...p.media, [type]:[...(p.media[type]||[]), {name:file.name, data}]}})); ok++;
-      } catch (ex) { bad.push(file.name + (ex.message === "size" ? " (بیش از ۳ مگابایت)" : " (فرمت پشتیبانی نمی‌شود)")); }
+      } catch (ex) { bad.push(file.name + (ex.message === "size" ? " (حجم زیاد)" : " (فرمت پشتیبانی نمی‌شود)")); }
     }
     setMediaMsg(`${ok} فایل اضافه شد.` + (bad.length ? ` ناموفق: ${bad.join("، ")}` : ""));
   };
@@ -1402,6 +1434,16 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
         </div>
       </div>
       <div><label className="label">آدرس کامل</label><textarea className="textarea" rows={2} value={f.address} onChange={e=>set("address",e.target.value)} /></div>
+      <div className="g2">
+  <div>
+    <label className="label">عرض جغرافیایی (Latitude)</label>
+    <input className="input" value={f.latitude || ""} onChange={e=>set("latitude",e.target.value)} placeholder="مثلاً 35.6892" />
+  </div>
+  <div>
+    <label className="label">طول جغرافیایی (Longitude)</label>
+    <input className="input" value={f.longitude || ""} onChange={e=>set("longitude",e.target.value)} placeholder="مثلاً 51.3890" />
+  </div>
+</div>
       <div className="panel" style={{padding:12}}>
         <div className="label" style={{marginBottom:8, color:"var(--accent2)"}}>فضای مجازی</div>
         <div className="g2">
@@ -1505,7 +1547,7 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
 }
 
 function CasesPage({ cases, setCases, sound }) {
-  const [filter, setFilter] = useState({status:"all", category:"all", danger:"all", q:""});
+  const [filter, setFilter] = useState({status:"all", category:"all", danger:"all", org:"all", q:""});
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
@@ -1514,6 +1556,7 @@ function CasesPage({ cases, setCases, sound }) {
     if (filter.status!=="all" && c.status!==filter.status) return false;
     if (filter.category!=="all" && c.category!==filter.category) return false;
     if (filter.danger!=="all" && c.dangerLevel!==filter.danger) return false;
+    if (filter.org!=="all" && c.orgAffiliation!==filter.org) return false;
     if (filter.q) {
       const q = filter.q.toLowerCase();
       const s = `${c.firstName} ${c.lastName} ${c.nickname} ${c.nationalId} ${c.phone} ${c.crimeType} ${c.province} ${c.city}`.toLowerCase();
@@ -1563,6 +1606,17 @@ function CasesPage({ cases, setCases, sound }) {
           <option value="all">سطح خطر</option>
           {DANGER_LEVELS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}
         </select>
+        <select className="select" style={{width:"auto", minWidth:140}} value={filter.org} onChange={e=>setFilter(f=>({...f,org:e.target.value}))}>
+          <option value="all">وابستگی سازمانی</option>
+          <option value="مستقل/غیرحکومتی">مستقل/غیرحکومتی</option>
+          <option value="قوه قضائیه">قوه قضائیه</option>
+          <option value="سپاه">سپاه</option>
+          <option value="بسیج">بسیج</option>
+          <option value="نیروی انتظامی">نیروی انتظامی</option>
+          <option value="وزارت اطلاعات">وزارت اطلاعات</option>
+          <option value="مجلس">مجلس</option>
+          <option value="سایر">سایر</option>
+        </select>
       </div>
       <div style={{flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:8}}>
         {filtered.length===0 && <div style={{textAlign:"center", padding:48, color:"var(--text2)"}}>پرونده‌ای یافت نشد</div>}
@@ -1574,6 +1628,7 @@ function CasesPage({ cases, setCases, sound }) {
             <div style={{flex:1, minWidth:0}}>
               <div style={{fontWeight:600, fontSize:13}} className="truncate">
                 {c.firstName} {c.lastName}{c.nickname?` · ${c.nickname}`:""}
+                {c.orgAffiliation && c.orgAffiliation!=="مستقل/غیرحکومتی" && <span style={{display:"inline-block", marginRight:8, padding:"2px 7px", borderRadius:5, background:"#ff3b6b", color:"#fff", fontSize:10, fontWeight:600}}>سازمانی</span>}
               </div>
               <div style={{display:"flex", gap:8, flexWrap:"wrap", marginTop:3, fontSize:11, color:"var(--text2)"}}>
                 <span>{c.crimeType||"—"}</span>
@@ -1625,6 +1680,13 @@ function CasesPage({ cases, setCases, sound }) {
               {viewing.events && <div style={{marginTop:8}}><span className="text-muted">وقایع: </span>{viewing.events}</div>}
               {viewing.relatedPeople && <div style={{marginTop:8}}><span className="text-muted">افراد مرتبط: </span>{viewing.relatedPeople}</div>}
               {viewing.notes && <div style={{marginTop:8}}><span className="text-muted">یادداشت: </span>{viewing.notes}</div>}
+              {viewing.latitude && viewing.longitude && (
+  <div style={{marginTop:12}}>
+    <button className="btn btn-primary" onClick={() => { setViewing(null); setActive("geo"); }}>
+      📍 مشاهده روی نقشه
+    </button>
+  </div>
+)}
               {viewing.media?.photos?.length>0 && (
                 <div style={{display:"flex", gap:8, flexWrap:"wrap", marginTop:12}}>
                   {viewing.media.photos.map((p,i)=><img key={i} src={p.data} alt="" style={{width:72,height:72,objectFit:"cover",borderRadius:6,border:"1px solid var(--border)"}} />)}
@@ -2250,7 +2312,71 @@ function AIPage({ cases, network, sound }) {
   );
 }
 
-function HomePage({ cases, network, setActive, sound }) {
+function GeoPage({ cases, sound }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    // ساخت نقشه
+    const map = L.map(mapRef.current, { minZoom: 5, maxZoom: 18 }).setView([32.4279, 53.6880], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+    mapInstanceRef.current = map;
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // اضافه کردن مارکرها
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // پاک کردن مارکرهای قبلی (برای جلوگیری از تکرار)
+    map.eachLayer((layer) => {
+      if (layer instanceof L.Marker) {
+        map.removeLayer(layer);
+      }
+    });
+
+    cases.forEach(c => {
+      if (c.latitude && c.longitude) {
+        const lat = parseFloat(c.latitude);
+        const lng = parseFloat(c.longitude);
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        // ساخت مارکر با انیمیشن CSS
+        const icon = L.divIcon({
+          className: 'custom-marker',
+          html: `<div style="width: 20px; height: 20px; background: #ff3b6b; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 10px #ff3b6b; animation: pulse 1.5s infinite;"></div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        L.marker([lat, lng], { icon })
+          .addTo(map)
+          .bindPopup(`<b>${c.firstName} ${c.lastName}</b><br/>${c.crimeType || ""}`);
+      }
+    });
+  }, [cases]);
+
+  return (
+    <div style={{display:"flex", flexDirection:"column", height:"100%", gap:14}}>
+      <h1 style={{fontSize:18, fontWeight:700, color:"var(--accent2)"}}>نقطه‌زنی (نقشه جغرافیایی)</h1>
+      <div ref={mapRef} style={{flex:1, minHeight:"500px", borderRadius:10, border:"1px solid var(--border)", zIndex:1}}></div>
+    </div>
+  );
+}
+
+     function HomePage({ cases, network, setActive, sound }) {
   const open = cases.filter(c=>c.status==="open").length;
   const crit = cases.filter(c=>c.dangerLevel==="critical"||c.dangerLevel==="high").length;
   const recent = [...cases].sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt)).slice(0,5);
@@ -2451,7 +2577,7 @@ function SettingsPage({ settings, setSettings, sound, onLock, audit, api }) {
           <button className="btn btn-danger" style={{ fontSize: 12 }} onClick={doWipe}>پاک‌سازی کامل</button>
         </div>
       </div>
-      <div style={{ fontSize: 11, color: "var(--text2)", padding: "8px 4px" }}>گرگ v4.0 — خزانه رمزشده</div>
+      <div style={{ fontSize: 11, color: "var(--text2)", padding: "8px 4px" }}>گرگ v4.1 — خزانه رمزشده (پایدارتر)</div>
     </div>
   );
 }
@@ -2495,7 +2621,9 @@ function App() {
     if (!authed) return;
     Vault.persist({ cases, network, audit })
       .then(() => setSaveErr(""))
-      .catch(() => setSaveErr("ذخیره ناموفق بود (احتمالاً حجم رسانه‌ها از ظرفیت مرورگر بیشتر است). تغییرات اخیر ذخیره نشده‌اند؛ رسانه‌های حجیم را حذف کنید."));
+      .catch((err) => setSaveErr(err && String(err.message).includes("QUOTA") 
+        ? "حجم داده‌ها از ظرفیت localStorage بیشتر است. عکس/ویدیوهای حجیم را حذف کنید یا از پشتیبان استفاده کنید."
+        : "ذخیره ناموفق بود. تغییرات اخیر ممکن است ذخیره نشده باشند."));
   }, [cases, network, audit, authed]);
 
   /* auto-lock on inactivity */
@@ -2559,6 +2687,7 @@ function App() {
           {active === "cases" && <CasesPage cases={cases} setCases={setCases} sound={settings.sound} />}
           {active === "network" && <NetworkPage network={network} setNetwork={setNetwork} cases={cases} sound={settings.sound} />}
           {active === "map" && <MapPage cases={cases} sound={settings.sound} />}
+          {active === "geo" && <GeoPage cases={cases} sound={settings.sound} />}
           {active === "ai" && settings.ai && <AIPage cases={cases} network={network} sound={settings.sound} />}
           {active === "ai" && !settings.ai && <div style={{ textAlign: "center", padding: 60, color: "var(--text2)" }}>دستیار غیرفعال است</div>}
           {active === "settings" && <SettingsPage settings={settings} setSettings={setSettings} sound={settings.sound} onLock={() => lockNow("lock_manual")} audit={audit} api={api} />}
@@ -2573,6 +2702,19 @@ function App() {
     </div>
   );
 }
+
+
+window.addEventListener("error", function(e) {
+  try {
+    console.error("[WOLF]", e.message, e.filename, e.lineno);
+  } catch (_) {}
+});
+window.addEventListener("unhandledrejection", function(e) {
+  try {
+    console.error("[WOLF] unhandled", e.reason);
+    e.preventDefault();
+  } catch (_) {}
+});
 
 if (window.__WOLF_TG_GATE__ === true) {
   ReactDOM.createRoot(document.getElementById("root")).render(<App />);
