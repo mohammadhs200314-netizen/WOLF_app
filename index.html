@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://telegram.org https://unpkg.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; media-src data: blob:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://telegram.org https://unpkg.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com data:; img-src data: blob: https:; media-src data: blob: https:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <meta name="referrer" content="no-referrer" />
   <meta name="robots" content="noindex,nofollow" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -17,35 +17,57 @@
     (function initializeSecurity() {
       "use strict";
       const ALLOWED_USER_ID = 5511641524;
-      let allowed = false;
-      let gateReason = "unknown";
-      try {
-        const tg = window.Telegram && window.Telegram.WebApp;
-        if (!tg) {
-          gateReason = "sdk_missing";
-        } else {
-          // Notify Telegram that the Mini App has initialized. This does not bypass auth.
-          try { tg.ready(); } catch (_) {}
+      const startedAt = Date.now();
+      let readyCalled = false;
+
+      function inspectTelegram() {
+        let reason = "unknown";
+        try {
+          const tg = window.Telegram && window.Telegram.WebApp;
+          if (!tg) return { allowed: false, pending: true, reason: "sdk_missing" };
+          if (!readyCalled && typeof tg.ready === "function") {
+            try { tg.ready(); } catch (_) {}
+            readyCalled = true;
+          }
           const raw = typeof tg.initData === "string" ? tg.initData : "";
-          const unsafeId = tg.initDataUnsafe && tg.initDataUnsafe.user
-            ? tg.initDataUnsafe.user.id : null;
+          if (!raw) return { allowed: false, pending: true, reason: "initdata_missing" };
+
           const params = new URLSearchParams(raw);
           const userField = params.get("user");
           const rawUser = userField ? JSON.parse(userField) : null;
           const rawId = rawUser && rawUser.id;
+          const unsafeId = tg.initDataUnsafe && tg.initDataUnsafe.user
+            ? tg.initDataUnsafe.user.id : null;
 
-          if (!raw) gateReason = "initdata_missing";
-          else if (!params.has("hash")) gateReason = "hash_missing";
-          else if (!Number.isSafeInteger(Number(rawId))) gateReason = "user_invalid";
-          else if (Number(rawId) !== ALLOWED_USER_ID) gateReason = "user_not_allowed";
-          else if (Number(unsafeId) !== ALLOWED_USER_ID) gateReason = "user_context_mismatch";
-          else { allowed = true; gateReason = "ok"; }
+          if (!params.has("hash")) reason = "hash_missing";
+          else if (!Number.isSafeInteger(Number(rawId))) reason = "user_invalid";
+          else if (Number(rawId) !== ALLOWED_USER_ID) reason = "user_not_allowed";
+          else if (Number(unsafeId) !== ALLOWED_USER_ID) reason = "user_context_mismatch";
+          else return { allowed: true, pending: false, reason: "ok" };
+          return { allowed: false, pending: false, reason: reason };
+        } catch (_) {
+          return { allowed: false, pending: false, reason: "initdata_parse_error" };
         }
-      } catch (_) { allowed = false; gateReason = "initdata_parse_error"; }
+      }
 
-      window.__WOLF_TG_GATE__ = allowed;
-      window.__WOLF_TG_GATE_REASON__ = gateReason;
-      // Fail closed without deleting the document: a diagnostic screen is shown below.
+      // Telegram's WebView bridge can become available just after the page script.
+      // Wait briefly for initData; never grant access unless every original check passes.
+      window.__WOLF_TG_GATE__ = false;
+      window.__WOLF_TG_GATE_REASON__ = "pending";
+      window.__WOLF_TG_GATE_PROMISE__ = new Promise(function (resolve) {
+        function tick() {
+          const result = inspectTelegram();
+          if (result.allowed || !result.pending || Date.now() - startedAt >= 2500) {
+            if (result.pending) result.reason = result.reason === "sdk_missing" ? "sdk_missing" : "initdata_missing";
+            window.__WOLF_TG_GATE__ = result.allowed === true;
+            window.__WOLF_TG_GATE_REASON__ = result.reason;
+            resolve({ allowed: result.allowed === true, reason: result.reason });
+            return;
+          }
+          window.setTimeout(tick, 50);
+        }
+        tick();
+      });
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
@@ -294,6 +316,81 @@
 </head>
 <body>
 <div id="root"></div>
+<script>
+/* WOLF startup diagnostics. This plain JavaScript runs even if React/Babel fails. */
+(function () {
+  "use strict";
+  var root = document.getElementById("root");
+  if (!root) return;
+  function show(title, detail) {
+    if (root.dataset.appStarted === "1") return;
+    root.textContent = "";
+    var panel = document.createElement("div");
+    panel.style.cssText = "min-height:100%;width:100%;display:flex;align-items:center;justify-content:center;padding:24px;background:#070b12;color:#dce4f0;font-family:system-ui,sans-serif;text-align:center";
+    var box = document.createElement("div");
+    box.style.cssText = "max-width:480px;border:1px solid #243044;border-radius:14px;background:#0f1624;padding:24px;line-height:2;overflow-wrap:anywhere";
+    var h = document.createElement("div"); h.textContent = title;
+    h.style.cssText = "font-size:18px;font-weight:700;color:#00c4ff;margin-bottom:12px";
+    var p = document.createElement("div"); p.textContent = detail;
+    p.style.cssText = "font-size:14px;color:#dce4f0;white-space:pre-wrap";
+    var note = document.createElement("div");
+    note.textContent = "دسترسی همچنان قفل است؛ هیچ بررسی امنیتی یا رمز عبوری دور زده نشده است.";
+    note.style.cssText = "font-size:12px;color:#8b9bb4;margin-top:16px";
+    box.appendChild(h); box.appendChild(p); box.appendChild(note);
+    panel.appendChild(box); root.appendChild(panel);
+  }
+  window.__WOLF_SHOW_DIAGNOSTIC__ = show;
+  show("در حال بررسی ورود امن تلگرام…", "در حال دریافت اطلاعات ورود از مینی‌اپ تلگرام هستیم. لطفاً چند لحظه صبر کنید.");
+  var gateMessages = {
+    sdk_missing: "کتابخانه رسمی تلگرام بارگذاری نشده است. دسترسی به telegram.org یا اتصال اینترنت را بررسی کنید.",
+    initdata_missing: "تلگرام اطلاعات ورود (initData) نفرستاده است. برنامه را از دکمه وب‌اپ داخل ربات اجرا کنید.",
+    hash_missing: "فیلد hash در اطلاعات ورود تلگرام وجود ندارد. وب‌اپ را ببندید و دوباره از دکمه ربات باز کنید.",
+    user_invalid: "شناسه کاربر در اطلاعات دریافتی تلگرام معتبر نیست.",
+    user_not_allowed: "این حساب تلگرام در فهرست شناسه‌های مجاز این نسخه نیست.",
+    user_context_mismatch: "شناسه کاربر در دو بخش اطلاعات تلگرام با هم مطابقت ندارد.",
+    initdata_parse_error: "خواندن اطلاعات ورود تلگرام با خطا روبه‌رو شد.",
+    unknown: "ورود تلگرام تأیید نشد."
+  };
+  function installRuntimeDiagnostics() {
+    window.addEventListener("error", function (e) {
+      if (root.dataset.appStarted === "1") return;
+      var target = e && e.target;
+      var detail = (e && e.message) ? e.message : "بارگذاری یکی از فایل‌های لازم ناموفق بود.";
+      if (target && (target.src || target.href)) detail += "\nمنبع: " + (target.src || target.href);
+      show("خطا در راه‌اندازی برنامه", detail);
+    }, true);
+    window.addEventListener("unhandledrejection", function (e) {
+      if (root.dataset.appStarted === "1") return;
+      var r = e && e.reason;
+      show("خطای اجرای برنامه", r ? String(r.message || r) : "یک عملیات ناهمگام ناموفق بود.");
+    });
+    document.addEventListener("securitypolicyviolation", function (e) {
+      if (root.dataset.appStarted === "1") return;
+      show("سیاست امنیتی بارگذاری یک منبع را مسدود کرد",
+        "دستور: " + e.violatedDirective + "\nمنبع: " + e.blockedURI);
+    });
+    window.setTimeout(function () {
+      if (root.dataset.appStarted !== "1") {
+        var missing = [];
+        if (!window.React) missing.push("React");
+        if (!window.ReactDOM) missing.push("ReactDOM");
+        if (!window.Babel) missing.push("Babel");
+        show("رابط برنامه راه‌اندازی نشد", missing.length
+          ? "کتابخانه بارگذاری‌نشده: " + missing.join(", ")
+          : "کد رابط اجرا نشد یا خطای جاوااسکریپت رخ داده است. اتصال CDNها و خطای اجرای اسکریپت را بررسی کنید.");
+      }
+    }, 10000);
+  }
+  if (window.__WOLF_TG_GATE_PROMISE__ && typeof window.__WOLF_TG_GATE_PROMISE__.then === "function") {
+    window.__WOLF_TG_GATE_PROMISE__.then(function (gate) {
+      if (!gate.allowed) show("ورود امن تلگرام تأیید نشد", gateMessages[gate.reason] || gateMessages.unknown);
+      else { root.textContent = ""; installRuntimeDiagnostics(); }
+    });
+  } else {
+    show("خطای راه‌اندازی", "بررسی اولیه تلگرام اجرا نشد.");
+  }
+})();
+</script>
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -2681,40 +2778,24 @@ function App() {
   );
 }
 
-if (window.__WOLF_TG_GATE__ === true) {
-  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-} else {
-  // Keep the access gate closed, but explain why instead of blanking the whole page.
-  const root = document.getElementById("root");
-  if (root) {
-    const messages = {
-      sdk_missing: "کتابخانه تلگرام بارگذاری نشده است. اتصال اینترنت یا مسدود نبودن telegram.org را بررسی کنید.",
-      initdata_missing: "اطلاعات ورود تلگرام دریافت نشده است. برنامه را فقط از دکمهٔ وب‌اپ داخل ربات باز کنید؛ لینک را مستقیم در مرورگر باز نکنید.",
-      hash_missing: "امضای همراه اطلاعات ورود تلگرام دریافت نشده است. وب‌اپ را ببندید و دوباره از داخل ربات باز کنید.",
-      user_invalid: "اطلاعات شناسهٔ کاربر از تلگرام قابل‌خواندن نیست. وب‌اپ را دوباره از داخل ربات اجرا کنید.",
-      user_not_allowed: "این حساب تلگرام در فهرست کاربران مجاز این نسخه نیست.",
-      user_context_mismatch: "شناسهٔ حساب در اطلاعات تلگرام با زمینهٔ ورود مطابقت ندارد. وب‌اپ را ببندید و دوباره اجرا کنید.",
-      initdata_parse_error: "خواندن اطلاعات ورود تلگرام ناموفق بود. وب‌اپ را دوباره از داخل ربات اجرا کنید.",
-      unknown: "ورود تلگرام تأیید نشد. وب‌اپ را دوباره از داخل ربات اجرا کنید."
-    };
-    root.innerHTML = "";
-    const panel = document.createElement("div");
-    panel.style.cssText = "min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;background:#070b12;color:#dce4f0;font-family:system-ui,sans-serif;text-align:center";
-    const content = document.createElement("div");
-    content.style.cssText = "max-width:440px;border:1px solid #243044;border-radius:14px;background:#0f1624;padding:24px;line-height:2";
-    const title = document.createElement("div");
-    title.textContent = "ورود امن تلگرام تأیید نشد";
-    title.style.cssText = "font-size:18px;font-weight:700;color:#00c4ff;margin-bottom:12px";
-    const detail = document.createElement("div");
-    detail.textContent = messages[window.__WOLF_TG_GATE_REASON__] || messages.unknown;
-    detail.style.cssText = "font-size:14px;color:#dce4f0";
-    const note = document.createElement("div");
-    note.textContent = "قفل دسترسی فعال مانده است؛ هیچ لایهٔ احراز هویت یا داده‌ای دور زده نشده است.";
-    note.style.cssText = "font-size:12px;color:#8b9bb4;margin-top:16px";
-    content.append(title, detail, note);
-    panel.appendChild(content);
-    root.appendChild(panel);
-  }
+if (window.__WOLF_TG_GATE_PROMISE__ && typeof window.__WOLF_TG_GATE_PROMISE__.then === "function") {
+  window.__WOLF_TG_GATE_PROMISE__.then(function (gate) {
+    if (!gate.allowed) return; // Fail closed: no protected UI for an unapproved user.
+    try {
+      document.getElementById("root").textContent = "";
+      if (!window.React || !window.ReactDOM || typeof ReactDOM.createRoot !== "function") {
+        throw new Error("کتابخانه React یا ReactDOM بارگذاری نشده است.");
+      }
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+      document.getElementById("root").dataset.appStarted = "1";
+    } catch (err) {
+      if (window.__WOLF_SHOW_DIAGNOSTIC__) {
+        window.__WOLF_SHOW_DIAGNOSTIC__("خطا هنگام ساخت رابط برنامه", err && err.message ? err.message : String(err));
+      }
+    }
+  });
+} else if (window.__WOLF_SHOW_DIAGNOSTIC__) {
+  window.__WOLF_SHOW_DIAGNOSTIC__("خطای راه‌اندازی", "بررسی اولیه تلگرام اجرا نشد.");
 }
 </script>
 </body>
