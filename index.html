@@ -48,6 +48,8 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>گرگ | سامانه امنیتی شناسایی و مدیریت پرونده</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -281,6 +283,11 @@
     }
     .banner-err { background: #ff3b6b18; border-bottom: 1px solid #ff3b6b55; color: var(--danger); padding: 8px 16px; font-size: 12px; flex-shrink: 0; }
     @media print { body * { display: none !important; } }
+    @keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -1283,6 +1290,7 @@ function Sidebar({ active, setActive, sound, onLogout }) {
     {id:"cases", label:"پرونده‌ها", Icon:I.Cases},
     {id:"network", label:"شبکه", Icon:I.Network},
     {id:"map", label:"نقشه", Icon:I.Map},
+    {id:"geo", label:"نقطه‌زنی", Icon:I.Map},
     {id:"ai", label:"گرگ", Icon:()=><WolfLogo size={18} />},
     {id:"settings", label:"تنظیمات", Icon:I.Settings},
   ];
@@ -1339,6 +1347,8 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
     socials:{x:"",telegram:"",instagram:"",other:""},
     relatedPeople:"", events:"", crimeType:"", dangerLevel:"medium",
     status:"open", category:"history", notes:"", extraNotes:"",
+    orgAffiliation:"", orgRole:"", influenceLevel:"",
+    latitude:"", longitude:"",
     media:{photos:[],videos:[],audios:[]}
   };
   const [f, setF] = useState(initial ? {...empty, ...initial} : empty);
@@ -1402,6 +1412,16 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
         </div>
       </div>
       <div><label className="label">آدرس کامل</label><textarea className="textarea" rows={2} value={f.address} onChange={e=>set("address",e.target.value)} /></div>
+      <div className="g2">
+  <div>
+    <label className="label">عرض جغرافیایی (Latitude)</label>
+    <input className="input" value={f.latitude || ""} onChange={e=>set("latitude",e.target.value)} placeholder="مثلاً 35.6892" />
+  </div>
+  <div>
+    <label className="label">طول جغرافیایی (Longitude)</label>
+    <input className="input" value={f.longitude || ""} onChange={e=>set("longitude",e.target.value)} placeholder="مثلاً 51.3890" />
+  </div>
+</div>
       <div className="panel" style={{padding:12}}>
         <div className="label" style={{marginBottom:8, color:"var(--accent2)"}}>فضای مجازی</div>
         <div className="g2">
@@ -1413,30 +1433,63 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
       </div>
       <div className="g2">
         <div>
-          <label className="label">نوع جرم</label>
-          <select className="select" value={f.crimeType} onChange={e=>set("crimeType",e.target.value)}>
-            <option value="">انتخاب</option>
-            {CRIME_TYPES.map(c=><option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label">سطح خطر</label>
-          <select className="select" value={f.dangerLevel} onChange={e=>set("dangerLevel",e.target.value)}>
-            {DANGER_LEVELS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label">وضعیت</label>
-          <select className="select" value={f.status} onChange={e=>set("status",e.target.value)}>
-            {CASE_STATUS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label">دسته‌بندی</label>
-          <select className="select" value={f.category} onChange={e=>set("category",e.target.value)}>
-            {CASE_CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
-        </div>
+          <div className="g2">
+  <div>
+    <label className="label">وابستگی سازمانی</label>
+    <select className="select" value={f.orgAffiliation || ""} onChange={e=>set("orgAffiliation",e.target.value)}>
+      <option value="">انتخاب</option>
+      <option value="مستقل/غیرحکومتی">مستقل/غیرحکومتی</option>
+      <option value="قوه قضائیه (قاضی/دادستان)">قوه قضائیه (قاضی/دادستان)</option>
+      <option value="سپاه پاسداران">سپاه پاسداران</option>
+      <option value="بسیج">بسیج</option>
+      <option value="نیروی انتظامی">نیروی انتظامی</option>
+      <option value="وزارت اطلاعات">وزارت اطلاعات</option>
+      <option value="مجلس شورای اسلامی">مجلس شورای اسلامی</option>
+      <option value="سازمان‌های دیگر">سازمان‌های دیگر</option>
+    </select>
+  </div>
+  <div>
+    <label className="label">سمت سازمانی</label>
+    <input className="input" value={f.orgRole || ""} onChange={e=>set("orgRole",e.target.value)} placeholder="مثلاً قاضی شعبه ۳" />
+  </div>
+  <div>
+    <label className="label">سطح نفوذ</label>
+    <select className="select" value={f.influenceLevel || ""} onChange={e=>set("influenceLevel",e.target.value)}>
+      <option value="">انتخاب</option>
+      <option value="سطح محلی">سطح محلی</option>
+      <option value="سطح استانی">سطح استانی</option>
+      <option value="سطح ملی">سطح ملی</option>
+      <option value="سطح بین‌المللی">سطح بین‌المللی</option>
+    </select>
+  </div>
+</div>
+<div className="g2">
+  <div>
+    <label className="label">نوع جرم</label>
+    <select className="select" value={f.crimeType} onChange={e=>set("crimeType",e.target.value)}>
+      <option value="">انتخاب</option>
+      {CRIME_TYPES.map(c=><option key={c} value={c}>{c}</option>)}
+    </select>
+  </div>
+  <div>
+    <label className="label">سطح خطر</label>
+    <select className="select" value={f.dangerLevel} onChange={e=>set("dangerLevel",e.target.value)}>
+      {DANGER_LEVELS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}
+    </select>
+  </div>
+  <div>
+    <label className="label">وضعیت</label>
+    <select className="select" value={f.status} onChange={e=>set("status",e.target.value)}>
+      {CASE_STATUS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+    </select>
+  </div>
+  <div>
+    <label className="label">دسته‌بندی</label>
+    <select className="select" value={f.category} onChange={e=>set("category",e.target.value)}>
+      {CASE_CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+    </select>
+  </div>
+</div>
       </div>
       <div><label className="label">افراد مرتبط</label><textarea className="textarea" rows={2} value={f.relatedPeople} onChange={e=>set("relatedPeople",e.target.value)} placeholder="نام و نسبت..." /></div>
       <div><label className="label">وقایع و جزئیات</label><textarea className="textarea" rows={3} value={f.events} onChange={e=>set("events",e.target.value)} /></div>
@@ -1472,7 +1525,7 @@ function CaseForm({ initial, onSave, onCancel, sound }) {
 }
 
 function CasesPage({ cases, setCases, sound }) {
-  const [filter, setFilter] = useState({status:"all", category:"all", danger:"all", q:""});
+  const [filter, setFilter] = useState({status:"all", category:"all", danger:"all", org:"all", q:""});
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
@@ -1481,6 +1534,7 @@ function CasesPage({ cases, setCases, sound }) {
     if (filter.status!=="all" && c.status!==filter.status) return false;
     if (filter.category!=="all" && c.category!==filter.category) return false;
     if (filter.danger!=="all" && c.dangerLevel!==filter.danger) return false;
+    if (filter.org!=="all" && c.orgAffiliation!==filter.org) return false;
     if (filter.q) {
       const q = filter.q.toLowerCase();
       const s = `${c.firstName} ${c.lastName} ${c.nickname} ${c.nationalId} ${c.phone} ${c.crimeType} ${c.province} ${c.city}`.toLowerCase();
@@ -1530,6 +1584,17 @@ function CasesPage({ cases, setCases, sound }) {
           <option value="all">سطح خطر</option>
           {DANGER_LEVELS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}
         </select>
+        <select className="select" style={{width:"auto", minWidth:140}} value={filter.org} onChange={e=>setFilter(f=>({...f,org:e.target.value}))}>
+          <option value="all">وابستگی سازمانی</option>
+          <option value="مستقل/غیرحکومتی">مستقل/غیرحکومتی</option>
+          <option value="قوه قضائیه">قوه قضائیه</option>
+          <option value="سپاه">سپاه</option>
+          <option value="بسیج">بسیج</option>
+          <option value="نیروی انتظامی">نیروی انتظامی</option>
+          <option value="وزارت اطلاعات">وزارت اطلاعات</option>
+          <option value="مجلس">مجلس</option>
+          <option value="سایر">سایر</option>
+        </select>
       </div>
       <div style={{flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:8}}>
         {filtered.length===0 && <div style={{textAlign:"center", padding:48, color:"var(--text2)"}}>پرونده‌ای یافت نشد</div>}
@@ -1541,6 +1606,7 @@ function CasesPage({ cases, setCases, sound }) {
             <div style={{flex:1, minWidth:0}}>
               <div style={{fontWeight:600, fontSize:13}} className="truncate">
                 {c.firstName} {c.lastName}{c.nickname?` · ${c.nickname}`:""}
+                {c.orgAffiliation && c.orgAffiliation!=="مستقل/غیرحکومتی" && <span style={{display:"inline-block", marginRight:8, padding:"2px 7px", borderRadius:5, background:"#ff3b6b", color:"#fff", fontSize:10, fontWeight:600}}>سازمانی</span>}
               </div>
               <div style={{display:"flex", gap:8, flexWrap:"wrap", marginTop:3, fontSize:11, color:"var(--text2)"}}>
                 <span>{c.crimeType||"—"}</span>
@@ -1592,6 +1658,13 @@ function CasesPage({ cases, setCases, sound }) {
               {viewing.events && <div style={{marginTop:8}}><span className="text-muted">وقایع: </span>{viewing.events}</div>}
               {viewing.relatedPeople && <div style={{marginTop:8}}><span className="text-muted">افراد مرتبط: </span>{viewing.relatedPeople}</div>}
               {viewing.notes && <div style={{marginTop:8}}><span className="text-muted">یادداشت: </span>{viewing.notes}</div>}
+              {viewing.latitude && viewing.longitude && (
+  <div style={{marginTop:12}}>
+    <button className="btn btn-primary" onClick={() => { setViewing(null); setActive("geo"); }}>
+      📍 مشاهده روی نقشه
+    </button>
+  </div>
+)}
               {viewing.media?.photos?.length>0 && (
                 <div style={{display:"flex", gap:8, flexWrap:"wrap", marginTop:12}}>
                   {viewing.media.photos.map((p,i)=><img key={i} src={p.data} alt="" style={{width:72,height:72,objectFit:"cover",borderRadius:6,border:"1px solid var(--border)"}} />)}
@@ -2043,42 +2116,112 @@ function AIPage({ cases, network, sound }) {
   };
 
   const ask = async (q) => {
-    q = (q || "").trim();
-    if (!q || busy) return;
+  q = (q || "").trim();
+  if (!q || busy) return;
 
-    // strip optional /ai prefix for cleaner message when online
-    let message = q;
-    if (q.toLowerCase().startsWith("/ai")) {
-      message = q.slice(3).trim() || q;
+  // تشخیص دستور /scan
+  if (q.toLowerCase().startsWith("/scan ")) {
+    const scanText = q.slice(6).trim();
+    if (!scanText) {
+      setMsgs(m => [...m, { role: "user", text: q }, { role: "ai", text: "بعد از /scan متن یا لینک رو بنویس." }]);
+      return;
     }
+    setMsgs(m => [...m, { role: "user", text: q }]);
+    setInput(""); setBusy(true); sfx("click", sound);
+    try {
+      const res = await fetch("https://wolf.mohammadhs200314.workers.dev/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: scanText })
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const reply = data.report || "تحلیلی یافت نشد.";
+      setMsgs(m => [...m, { role: "ai", text: reply }]);
+    } catch (err) {
+      setMsgs(m => [...m, { role: "ai", text: "خطا در تحلیل: " + err.message }]);
+    }
+    setBusy(false);
+    return;
+  }
 
+  // تشخیص Deep Search عمیق
+  const isDeepSearch = q.toLowerCase().startsWith("/deep ") || 
+                       /تحقیق کن|جستجوی عمیق|درباره .+ اطلاعات|اطلاعات .+ رو بیار/i.test(q);
+
+  if (isDeepSearch) {
+    let personName = q;
+    if (q.toLowerCase().startsWith("/deep ")) {
+      personName = q.slice(6).trim();
+    }
+    
     setMsgs(m => [...m, { role: "user", text: q }]);
     setInput(""); setBusy(true); sfx("click", sound);
 
-    if (online) {
-      try {
-        const history = (histRef.current || []).slice(-10);
-        const res = await fetch("https://wolf.mohammadhs200314.workers.dev/ai/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, history })
-        });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const data = await res.json();
-        const reply = (data && data.response) ? String(data.response) : "پاسخی دریافت نشد.";
-        setMsgs(m => [...m, { role: "ai", text: reply }]);
-        persistHistory([...history, { role: "user", content: message }, { role: "assistant", content: reply }]);
-        // learn for offline reuse
-        try { Learned.remember(message, reply); } catch (_) {}
-        setBusy(false);
-      } catch (err) {
-        setMsgs(m => [...m, { role: "ai", text: "اتصال به هوش مصنوعی برقرار نشد. از موتور آفلاین استفاده می‌شود" }]);
-        offlineReply(message || q);
-      }
-    } else {
-      offlineReply(q);
+    // پیام وضعیت برای کاربر
+    setMsgs(m => [...m, { role: "ai", text: "🔍 در حال انجام Deep Search عمیق...\n\nمرحله ۱: تجزیه سوال به بخش‌های کوچک‌تر...\nمرحله ۲: جستجوی موازی در منابع مختلف...\nمرحله ۳: استخراج و ترکیب اطلاعات...\n\nلطفاً صبر کنید..." }]);
+
+    try {
+      // درخواست به مسیر deep-search در Worker
+      const res = await fetch("https://wolf.mohammadhs200314.workers.dev/deep-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personName })
+      });
+      
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const reply = data.report || "گزارشی یافت نشد.";
+      
+      // جایگزینی پیام وضعیت با گزارش نهایی
+      setMsgs(m => {
+        const newMsgs = [...m];
+        newMsgs[newMsgs.length - 1] = { role: "ai", text: `📊 **گزارش Deep Search برای "${personName}":**\n\n${reply}` };
+        return newMsgs;
+      });
+    } catch (err) {
+      setMsgs(m => {
+        const newMsgs = [...m];
+        newMsgs[newMsgs.length - 1] = { role: "ai", text: "خطا در Deep Search: " + err.message };
+        return newMsgs;
+      });
     }
-  };
+    setBusy(false);
+    return;
+  }
+
+  // چت عادی
+  let message = q;
+  if (q.toLowerCase().startsWith("/ai")) {
+    message = q.slice(3).trim() || q;
+  }
+
+  setMsgs(m => [...m, { role: "user", text: q }]);
+  setInput(""); setBusy(true); sfx("click", sound);
+
+  if (online) {
+    try {
+      const history = (histRef.current || []).slice(-10);
+      const res = await fetch("https://wolf.mohammadhs200314.workers.dev/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, history })
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const reply = (data && data.response) ? String(data.response) : "پاسخی دریافت نشد.";
+      setMsgs(m => [...m, { role: "ai", text: reply }]);
+      persistHistory([...history, { role: "user", content: message }, { role: "assistant", content: reply }]);
+      try { Learned.remember(message, reply); } catch (_) {}
+      setBusy(false);
+    } catch (err) {
+      setMsgs(m => [...m, { role: "ai", text: "اتصال به هوش مصنوعی برقرار نشد. از موتور آفلاین استفاده می‌شود" }]);
+      offlineReply(message || q);
+    }
+  } else {
+    offlineReply(q);
+  }
+};
 
   const quick = ["یه جوک بگو", "ساعت و تاریخ", "خلاصه وضعیت", "پرونده‌های پرخطر", "یه رمز قوی بساز", "چند روز تا نوروز؟", "راهنما"];
 
@@ -2109,11 +2252,27 @@ function AIPage({ cases, network, sound }) {
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "4px 0" }}>
-        {msgs.map((m, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-start" : "flex-end" }}>
-            <div className={`chat-bubble ${m.role === "user" ? "chat-user" : "chat-ai"}`}>{m.text}</div>
-          </div>
-        ))}
+        {msgs.map((m, i) => {
+  const parts = m.text.split(/(```[\s\S]*?```)/g);
+  return (
+    <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-start" : "flex-end" }}>
+      <div className={`chat-bubble ${m.role === "user" ? "chat-user" : "chat-ai"}`} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {parts.map((part, idx) => {
+          if (part.startsWith("```") && part.endsWith("```")) {
+            const code = part.slice(3, -3).replace(/^\w+\n/, "");
+            return (
+              <div key={idx} style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: 10, fontFamily: "monospace", fontSize: 12, position: "relative", direction: "ltr", textAlign: "left" }}>
+                <button onClick={(e) => { navigator.clipboard.writeText(code); e.target.innerText = "کپی شد!"; setTimeout(() => e.target.innerText = "کپی", 2000); }} style={{ position: "absolute", top: 6, right: 6, background: "var(--accent)", color: "#000", border: "none", borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>کپی</button>
+                <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{code}</pre>
+              </div>
+            );
+          }
+          return <span key={idx} style={{ whiteSpace: "pre-wrap" }}>{part}</span>;
+        })}
+      </div>
+    </div>
+  );
+})}
         {busy && <div style={{ display: "flex", justifyContent: "flex-end" }}><div className="chat-bubble chat-ai" style={{ opacity: 0.55 }}>…</div></div>}
         <div ref={endRef} />
       </div>
@@ -2131,7 +2290,71 @@ function AIPage({ cases, network, sound }) {
   );
 }
 
-function HomePage({ cases, network, setActive, sound }) {
+function GeoPage({ cases, sound }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    // ساخت نقشه
+    const map = L.map(mapRef.current, { minZoom: 5, maxZoom: 18 }).setView([32.4279, 53.6880], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+    mapInstanceRef.current = map;
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // اضافه کردن مارکرها
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // پاک کردن مارکرهای قبلی (برای جلوگیری از تکرار)
+    map.eachLayer((layer) => {
+      if (layer instanceof L.Marker) {
+        map.removeLayer(layer);
+      }
+    });
+
+    cases.forEach(c => {
+      if (c.latitude && c.longitude) {
+        const lat = parseFloat(c.latitude);
+        const lng = parseFloat(c.longitude);
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        // ساخت مارکر با انیمیشن CSS
+        const icon = L.divIcon({
+          className: 'custom-marker',
+          html: `<div style="width: 20px; height: 20px; background: #ff3b6b; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 10px #ff3b6b; animation: pulse 1.5s infinite;"></div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        L.marker([lat, lng], { icon })
+          .addTo(map)
+          .bindPopup(`<b>${c.firstName} ${c.lastName}</b><br/>${c.crimeType || ""}`);
+      }
+    });
+  }, [cases]);
+
+  return (
+    <div style={{display:"flex", flexDirection:"column", height:"100%", gap:14}}>
+      <h1 style={{fontSize:18, fontWeight:700, color:"var(--accent2)"}}>نقطه‌زنی (نقشه جغرافیایی)</h1>
+      <div ref={mapRef} style={{flex:1, minHeight:"500px", borderRadius:10, border:"1px solid var(--border)", zIndex:1}}></div>
+    </div>
+  );
+}
+
+     function HomePage({ cases, network, setActive, sound }) {
   const open = cases.filter(c=>c.status==="open").length;
   const crit = cases.filter(c=>c.dangerLevel==="critical"||c.dangerLevel==="high").length;
   const recent = [...cases].sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt)).slice(0,5);
@@ -2440,6 +2663,7 @@ function App() {
           {active === "cases" && <CasesPage cases={cases} setCases={setCases} sound={settings.sound} />}
           {active === "network" && <NetworkPage network={network} setNetwork={setNetwork} cases={cases} sound={settings.sound} />}
           {active === "map" && <MapPage cases={cases} sound={settings.sound} />}
+          {active === "geo" && <GeoPage cases={cases} sound={settings.sound} />}
           {active === "ai" && settings.ai && <AIPage cases={cases} network={network} sound={settings.sound} />}
           {active === "ai" && !settings.ai && <div style={{ textAlign: "center", padding: 60, color: "var(--text2)" }}>دستیار غیرفعال است</div>}
           {active === "settings" && <SettingsPage settings={settings} setSettings={setSettings} sound={settings.sound} onLock={() => lockNow("lock_manual")} audit={audit} api={api} />}
